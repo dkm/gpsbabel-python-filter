@@ -317,6 +317,7 @@ typedef struct {
 	unsigned int proximity:1;		/* proximity field is set */
 	unsigned int course:1;			/* course field is set */
 	unsigned int speed:1;			/* speed field is set */
+	unsigned int vspeed:1;			/* vspeed field is set */
 	unsigned int depth:1;			/* depth field is set */
 	/* !ToDo!
 	unsigned int altitude:1;		/+ altitude field is set +/
@@ -415,6 +416,7 @@ typedef struct {
 	float pdop;		
 	float course;	/* Optional: degrees true */
 	float speed;   	/* Optional: meters per second. */
+	float vspeed;  	/* Optional: vertical meters per second. */
 	fix_type fix;	/* Optional: 3d, 2d, etc. */
 	int  sat;	/* Optional: number of sats used for fix */
 

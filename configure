@@ -694,6 +694,13 @@ OSJEEPS
 GBSER
 ZLIB
 EXPAT_LIB
+PYTHON_USE_TRUE
+PYTHON_USE_FALSE
+PYTHON
+PYTHON_PREFIX
+PYTHON_EXECPREFIX
+PYTHON_CSPEC
+PYTHON_LSPEC
 EFENCE_LIB
 GPSBABEL_DEBUG
 INSTALL_DEBUG
@@ -709,7 +716,8 @@ CFLAGS
 LDFLAGS
 LIBS
 CPPFLAGS
-CPP'
+CPP
+PYTHON'
 
 
 # Initialize some variables set by options.
@@ -1290,6 +1298,8 @@ Optional Features:
   --enable-csv=(yes)|no
   --enable-most=(yes)|no
   --enable-filters=(yes)|no
+  --enable-python[=PYTHON]
+                          absolute path name of Python executable
   --enable-efence=yes|(no)
 
 Optional Packages:
@@ -1299,6 +1309,7 @@ Optional Packages:
   --with-zlib=(included)|system|no
   --with-expathdr=DIR   Use this to specify the location of expat.h
   --with-libexpat=DIR   Use this to specify expat library .
+  --with-python[=PYTHON]  absolute path name of Python executable
   --with-doc=DIR        Path where the documentation will be stored.
 
 Some influential environment variables:
@@ -1310,6 +1321,7 @@ Some influential environment variables:
   CPPFLAGS    C/C++/Objective C preprocessor flags, e.g. -I<include dir> if
               you have headers in a nonstandard directory <include dir>
   CPP         C preprocessor
+  PYTHON      Python Executable Path
 
 Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -4517,6 +4529,531 @@ _ACEOF
 fi
 
 
+#Python setup
+
+    az_python_use=false
+     if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+
+
+
+
+    # unless PYTHON was supplied to us (as a precious variable),
+    # see if --enable-python[=PythonExecutablePath], --enable-python,
+    # --disable-python or --enable-python=no was given.
+    if test -z "$PYTHON"
+    then
+        { echo "$as_me:$LINENO: checking for --enable-python" >&5
+echo $ECHO_N "checking for --enable-python... $ECHO_C" >&6; }
+        # Check whether --enable-python was given.
+if test "${enable_python+set}" = set; then
+  enableval=$enable_python;
+                if test "$enableval" = "yes"
+                then
+                    # "yes" was specified, but we don't have a path
+                    # for the executable.
+                    # So, let's searth the PATH Environment Variable.
+                    { echo "$as_me:$LINENO: result: yes" >&5
+echo "${ECHO_T}yes" >&6; }
+                    # Extract the first word of "python", so it can be a program name with args.
+set dummy python; ac_word=$2
+{ echo "$as_me:$LINENO: checking for $ac_word" >&5
+echo $ECHO_N "checking for $ac_word... $ECHO_C" >&6; }
+if test "${ac_cv_path_PYTHON+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  case $PYTHON in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_PYTHON="$PYTHON" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+  for ac_exec_ext in '' $ac_executable_extensions; do
+  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
+    ac_cv_path_PYTHON="$as_dir/$ac_word$ac_exec_ext"
+    echo "$as_me:$LINENO: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+PYTHON=$ac_cv_path_PYTHON
+if test -n "$PYTHON"; then
+  { echo "$as_me:$LINENO: result: $PYTHON" >&5
+echo "${ECHO_T}$PYTHON" >&6; }
+else
+  { echo "$as_me:$LINENO: result: no" >&5
+echo "${ECHO_T}no" >&6; }
+fi
+
+
+                    if test -z "$PYTHON"
+                    then
+                        { { echo "$as_me:$LINENO: error: no path to python found" >&5
+echo "$as_me: error: no path to python found" >&2;}
+   { (exit 1); exit 1; }; }
+                    fi
+                    az_python_use=true
+                     if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+
+    if test -z "$PYTHON"
+    then
+        { { echo "$as_me:$LINENO: error: Python Executable Path is not known" >&5
+echo "$as_me: error: Python Executable Path is not known" >&2;}
+   { (exit 1); exit 1; }; }
+    fi
+    ax_python_prefix=`${PYTHON} -c "import sys; print sys.prefix"`
+    ax_python_execprefix=`${PYTHON} -c "import sys; print sys.exec_prefix"`
+    PYTHON_PREFIX="${ax_python_prefix}"
+
+    PYTHON_EXECPREFIX="${ax_python_execprefix}"
+
+
+                elif test "$enableval" = "no"
+                then
+                    { echo "$as_me:$LINENO: result: no" >&5
+echo "${ECHO_T}no" >&6; }
+                    az_python_use=false
+                     if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+                else
+                    # $enableval must be the executable path then.
+                    PYTHON="${enableval}"
+
+                    { echo "$as_me:$LINENO: result: $withval" >&5
+echo "${ECHO_T}$withval" >&6; }
+                    az_python_use=true
+                     if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+
+    if test -z "$PYTHON"
+    then
+        { { echo "$as_me:$LINENO: error: Python Executable Path is not known" >&5
+echo "$as_me: error: Python Executable Path is not known" >&2;}
+   { (exit 1); exit 1; }; }
+    fi
+    ax_python_prefix=`${PYTHON} -c "import sys; print sys.prefix"`
+    ax_python_execprefix=`${PYTHON} -c "import sys; print sys.exec_prefix"`
+    PYTHON_PREFIX="${ax_python_prefix}"
+
+    PYTHON_EXECPREFIX="${ax_python_execprefix}"
+
+
+                fi
+
+else
+
+                # --with-python was not specified.
+                { echo "$as_me:$LINENO: result: no" >&5
+echo "${ECHO_T}no" >&6; }
+                az_python_use=false
+                 if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+
+
+fi
+
+    fi
+
+             # Optional
+
+
+
+    # unless PYTHON was supplied to us (as a precious variable),
+    # see if --with-python[=PythonExecutablePath], --with-python,
+    # --without-python or --with-python=no was given.
+    if test -z "$PYTHON"
+    then
+        { echo "$as_me:$LINENO: checking for --with-python" >&5
+echo $ECHO_N "checking for --with-python... $ECHO_C" >&6; }
+
+# Check whether --with-python was given.
+if test "${with_python+set}" = set; then
+  withval=$with_python;
+                if test "$withval" = "yes"
+                then
+                    # "yes" was specified, but we don't have a path
+                    # for the executable.
+                    # So, let's searth the PATH Environment Variable.
+                    { echo "$as_me:$LINENO: result: yes" >&5
+echo "${ECHO_T}yes" >&6; }
+                    # Extract the first word of "python", so it can be a program name with args.
+set dummy python; ac_word=$2
+{ echo "$as_me:$LINENO: checking for $ac_word" >&5
+echo $ECHO_N "checking for $ac_word... $ECHO_C" >&6; }
+if test "${ac_cv_path_PYTHON+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  case $PYTHON in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_PYTHON="$PYTHON" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+  for ac_exec_ext in '' $ac_executable_extensions; do
+  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
+    ac_cv_path_PYTHON="$as_dir/$ac_word$ac_exec_ext"
+    echo "$as_me:$LINENO: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+PYTHON=$ac_cv_path_PYTHON
+if test -n "$PYTHON"; then
+  { echo "$as_me:$LINENO: result: $PYTHON" >&5
+echo "${ECHO_T}$PYTHON" >&6; }
+else
+  { echo "$as_me:$LINENO: result: no" >&5
+echo "${ECHO_T}no" >&6; }
+fi
+
+
+                    if test -z "$PYTHON"
+                    then
+                        { { echo "$as_me:$LINENO: error: no path to python found" >&5
+echo "$as_me: error: no path to python found" >&2;}
+   { (exit 1); exit 1; }; }
+                    fi
+                    az_python_use=true
+                     if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+
+    if test -z "$PYTHON"
+    then
+        { { echo "$as_me:$LINENO: error: Python Executable Path is not known" >&5
+echo "$as_me: error: Python Executable Path is not known" >&2;}
+   { (exit 1); exit 1; }; }
+    fi
+    ax_python_prefix=`${PYTHON} -c "import sys; print sys.prefix"`
+    ax_python_execprefix=`${PYTHON} -c "import sys; print sys.exec_prefix"`
+    PYTHON_PREFIX="${ax_python_prefix}"
+
+    PYTHON_EXECPREFIX="${ax_python_execprefix}"
+
+
+                elif test "$withval" = "no"
+                then
+                    { echo "$as_me:$LINENO: result: no" >&5
+echo "${ECHO_T}no" >&6; }
+                    az_python_use=false
+                     if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+                else
+                    # $withval must be the executable path then.
+                    PYTHON="${withval}"
+
+                    { echo "$as_me:$LINENO: result: $withval" >&5
+echo "${ECHO_T}$withval" >&6; }
+                    az_python_use=true
+                     if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+
+    if test -z "$PYTHON"
+    then
+        { { echo "$as_me:$LINENO: error: Python Executable Path is not known" >&5
+echo "$as_me: error: Python Executable Path is not known" >&2;}
+   { (exit 1); exit 1; }; }
+    fi
+    ax_python_prefix=`${PYTHON} -c "import sys; print sys.prefix"`
+    ax_python_execprefix=`${PYTHON} -c "import sys; print sys.exec_prefix"`
+    PYTHON_PREFIX="${ax_python_prefix}"
+
+    PYTHON_EXECPREFIX="${ax_python_execprefix}"
+
+
+                fi
+
+else
+
+                # --with-python was not specified.
+                { echo "$as_me:$LINENO: result: no" >&5
+echo "${ECHO_T}no" >&6; }
+                az_python_use=false
+                 if test x"$az_python_use" = x"true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+
+
+fi
+
+    fi
+
+               # Optional
+
+
+    # Extract the first word of "python", so it can be a program name with args.
+set dummy python; ac_word=$2
+{ echo "$as_me:$LINENO: checking for $ac_word" >&5
+echo $ECHO_N "checking for $ac_word... $ECHO_C" >&6; }
+if test "${ac_cv_path_PYTHON+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  case $PYTHON in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_PYTHON="$PYTHON" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+  for ac_exec_ext in '' $ac_executable_extensions; do
+  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
+    ac_cv_path_PYTHON="$as_dir/$ac_word$ac_exec_ext"
+    echo "$as_me:$LINENO: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+PYTHON=$ac_cv_path_PYTHON
+if test -n "$PYTHON"; then
+  { echo "$as_me:$LINENO: result: $PYTHON" >&5
+echo "${ECHO_T}$PYTHON" >&6; }
+else
+  { echo "$as_me:$LINENO: result: no" >&5
+echo "${ECHO_T}no" >&6; }
+fi
+
+
+    if test -z "$PYTHON"
+    then
+        { { echo "$as_me:$LINENO: error: Python Executable not found" >&5
+echo "$as_me: error: Python Executable not found" >&2;}
+   { (exit 1); exit 1; }; }
+    else
+        az_python_use=true
+    fi
+     if test "$az_python_use" = "true"; then
+  PYTHON_USE_TRUE=
+  PYTHON_USE_FALSE='#'
+else
+  PYTHON_USE_TRUE='#'
+  PYTHON_USE_FALSE=
+fi
+
+               # or AZ_PYTHON_INSIST( )
+# if $PYTHON is not defined, then the following do nothing.
+
+
+
+    if test -n "$PYTHON"
+    then
+        { echo "$as_me:$LINENO: checking whether $PYTHON version >= 2.5 " >&5
+echo $ECHO_N "checking whether $PYTHON version >= 2.5 ... $ECHO_C" >&6; }
+
+
+    if test -z "$PYTHON"
+    then
+        { { echo "$as_me:$LINENO: error: Python Executable not found" >&5
+echo "$as_me: error: Python Executable not found" >&2;}
+   { (exit 1); exit 1; }; }
+    else
+        cat >conftest.py <<_ACEOF
+
+import sys, string
+# split strings by '.' and convert to numeric.  Append some zeros
+# because we need at least 4 digits for the hex conversion.
+minver = map(int, string.split('2.5 ', '.')) + [0, 0, 0]
+minverhex = 0
+for i in xrange(0, 4): minverhex = (minverhex << 8) + minver[i]
+if sys.hexversion >= minverhex:
+    sys.exit( 0 )
+else:
+    sys.exit( 1 )
+
+_ACEOF
+        az_python_output=`$PYTHON conftest.py`
+        az_python_cc=$?
+        rm conftest.py
+        if test -f "conftest.pyc"
+        then
+            rm conftest.pyc
+        fi
+    fi
+
+        if test $az_python_cc -eq 0
+        then
+            { echo "$as_me:$LINENO: result: yes" >&5
+echo "${ECHO_T}yes" >&6; }
+        else { { echo "$as_me:$LINENO: error: too old" >&5
+echo "$as_me: error: too old" >&2;}
+   { (exit 1); exit 1; }; }
+
+
+
+        fi
+    fi
+
+
+
+
+    if test -n "$PYTHON"
+    then
+        az_python_prefix=`${PYTHON} -c "import sys; print sys.prefix"`
+        if test -z "$az_python_prefix"
+        then
+            { { echo "$as_me:$LINENO: error: Python Prefix is not known" >&5
+echo "$as_me: error: Python Prefix is not known" >&2;}
+   { (exit 1); exit 1; }; }
+        fi
+        az_python_execprefix=`${PYTHON} -c "import sys; print sys.exec_prefix"`
+        az_python_version=`$PYTHON -c "import sys; print sys.version[:3]"`
+        az_python_includespec="-I${az_python_prefix}/include/python${az_python_version}"
+        if test x"$python_prefix" != x"$python_execprefix"; then
+            az_python_execspec="-I${az_python_execprefix}/include/python${az_python_version}"
+            az_python_includespec="${az_python_includespec} $az_python_execspec"
+        fi
+        az_python_ccshared=`${PYTHON} -c "import distutils.sysconfig; print distutils.sysconfig.get_config_var('CFLAGSFORSHARED')"`
+        az_python_cspec="${az_python_ccshared} ${az_python_includespec}"
+        PYTHON_CSPEC=${az_python_cspec}
+
+        { echo "$as_me:$LINENO: PYTHON_CSPEC=${az_python_cspec}" >&5
+echo "$as_me: PYTHON_CSPEC=${az_python_cspec}" >&6;}
+    fi
+
+
+
+    if test -n "$PYTHON"
+    then
+
+
+    if test -z "$PYTHON"
+    then
+        { { echo "$as_me:$LINENO: error: Python Executable not found" >&5
+echo "$as_me: error: Python Executable not found" >&2;}
+   { (exit 1); exit 1; }; }
+    else
+        cat >conftest.py <<_ACEOF
+
+import sys
+import distutils.sysconfig
+strUseFrameWork = "--enable-framework"
+dictConfig = distutils.sysconfig.get_config_vars( )
+strConfigArgs = dictConfig.get("CONFIG_ARGS")
+strLinkSpec =  dictConfig.get('LDFLAGS')
+if -1 ==  strConfigArgs.find(strUseFrameWork):
+    strLibPL = dictConfig.get("LIBPL")
+    if strLibPL and (strLibPL != ""):
+        strLinkSpec += " -L%s" % (strLibPL)
+    strSys = dictConfig.get("SYSLIBS")
+    if strSys and (strSys != ""):
+        strLinkSpec += " %s" % (strSys)
+    strSHL = dictConfig.get("SHLIBS")
+    if strSHL and (strSHL != ""):
+        strLinkSpec += " %s" % (strSHL)
+    # Construct the Python Library Name.
+    strTmplte = " -lpython%d.%d"
+    if (sys.platform == "win32") or (sys.platform == "os2emx"):
+        strTmplte = " -lpython%d%d"
+    strWrk = strTmplte % ( (sys.hexversion >> 24),
+                            ((sys.hexversion >> 16) & 0xff))
+    strLinkSpec += strWrk
+else:
+    # This is not ideal since it changes the search path
+    # for Frameworks which could have side-effects on
+    # other included Frameworks.  However, it is necessary
+    # where someone has installed more than one frameworked
+    # Python.  Frameworks are really only used in MacOSX.
+    strLibFW = dictConfig.get("PYTHONFRAMEWORKPREFIX")
+    if strLibFW and (strLibFW != ""):
+        strLinkSpec += " -F%s" % (strLibFW)
+strLinkSpec += " %s" % (dictConfig.get('LINKFORSHARED'))
+print strLinkSpec
+
+_ACEOF
+        az_python_output=`$PYTHON conftest.py`
+        az_python_cc=$?
+        rm conftest.py
+        if test -f "conftest.pyc"
+        then
+            rm conftest.pyc
+        fi
+    fi
+
+        PYTHON_LSPEC=${az_python_output}
+
+        { echo "$as_me:$LINENO: PYTHON_LSPEC=${az_python_output}" >&5
+echo "$as_me: PYTHON_LSPEC=${az_python_output}" >&6;}
+    fi
+
+
 { echo "$as_me:$LINENO: checking for efence" >&5
 echo $ECHO_N "checking for efence... $ECHO_C" >&6; }
 # Check whether --enable-efence was given.
@@ -4764,6 +5301,76 @@ LIBOBJS=$ac_libobjs
 LTLIBOBJS=$ac_ltlibobjs
 
 
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
+if test -z "${PYTHON_USE_TRUE}" && test -z "${PYTHON_USE_FALSE}"; then
+  { { echo "$as_me:$LINENO: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&5
+echo "$as_me: error: conditional \"PYTHON_USE\" was never defined.
+Usually this means the macro was only invoked conditionally." >&2;}
+   { (exit 1); exit 1; }; }
+fi
 
 : ${CONFIG_STATUS=./config.status}
 ac_clean_files_save=$ac_clean_files
@@ -5370,6 +5977,13 @@ OSJEEPS!$OSJEEPS$ac_delim
 GBSER!$GBSER$ac_delim
 ZLIB!$ZLIB$ac_delim
 EXPAT_LIB!$EXPAT_LIB$ac_delim
+PYTHON_USE_TRUE!$PYTHON_USE_TRUE$ac_delim
+PYTHON_USE_FALSE!$PYTHON_USE_FALSE$ac_delim
+PYTHON!$PYTHON$ac_delim
+PYTHON_PREFIX!$PYTHON_PREFIX$ac_delim
+PYTHON_EXECPREFIX!$PYTHON_EXECPREFIX$ac_delim
+PYTHON_CSPEC!$PYTHON_CSPEC$ac_delim
+PYTHON_LSPEC!$PYTHON_LSPEC$ac_delim
 EFENCE_LIB!$EFENCE_LIB$ac_delim
 GPSBABEL_DEBUG!$GPSBABEL_DEBUG$ac_delim
 INSTALL_DEBUG!$INSTALL_DEBUG$ac_delim
@@ -5378,7 +5992,7 @@ LIBOBJS!$LIBOBJS$ac_delim
 LTLIBOBJS!$LTLIBOBJS$ac_delim
 _ACEOF
 
-  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 85; then
+  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 92; then
     break
   elif $ac_last_try; then
     { { echo "$as_me:$LINENO: error: could not make $CONFIG_STATUS" >&5

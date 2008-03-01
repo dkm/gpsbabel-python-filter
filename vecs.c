@@ -130,6 +130,7 @@ extern ff_vecs_t lmx_vecs;
 extern ff_vecs_t random_vecs;
 extern ff_vecs_t xol_vecs;
 extern ff_vecs_t navilink_vecs;
+extern ff_vecs_t pykml_vecs;
 
 static
 vecs_t vec_list[] = {
@@ -726,6 +727,12 @@ vecs_t vec_list[] = {
                 NULL
         },
 #endif // MAXIMAL_ENABLED
+	{
+	        &pykml_vecs,
+                "pykml",
+                "KML with Python",
+                "pykml"
+	},
 	{
 		NULL,
 		NULL,

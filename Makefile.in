@@ -1,5 +1,7 @@
 VPATH = @srcdir@
 
+ACLOCAL_AMFLAGS = -I ./m4
+
 # version and release are defined in the head of configure.in 
 # don't forget 'autoconf' if you change them 
 VERSD=@GBMAJOR@.@GBMINOR@.@GBMICRO@
@@ -34,8 +36,8 @@ OUTPUT_SWITCH=-o #
 #DEBUGGING=-g $(EXTRA_DEBUGGING)
 # add -DDEBUG_MEM to turn on memory allocation logging
 GBCFLAGS=$(EXTRA_CFLAGS) $(DEBUGGING) -I. \
-	$(OPTIMIZATION) @CFLAGS@
-LDFLAGS=$(EXTRA_LDFLAGS) @LDFLAGS@
+	$(OPTIMIZATION) @CFLAGS@ @PYTHON_CSPEC@
+LDFLAGS=$(EXTRA_LDFLAGS) @LDFLAGS@ @PYTHON_LSPEC@
 PREFIX=@prefix@
 INSTALL_DIR=$(DESTDIR)/$(PREFIX)
 
@@ -58,7 +60,7 @@ ALL_FMTS=$(MINIMAL_FMTS) gtm.o gpsutil.o pcx.o cetus.o copilot.o \
 	yahoo.o unicsv.o wfff_xml.o garmin_txt.o axim_gpb.o gpssim.o \
 	wbt-200.o stmsdf.o gtrnctr.o dmtlog.o raymarine.o alan.o vitovtt.o \
 	ggv_log.o g7towin.o garmin_gpi.o lmx.o random.o xol.o dg-100.o \
-	navilink.o mtk_logger.o
+	navilink.o mtk_logger.o pykml.o
 
 FMTS=@FMTS@
 
@@ -901,5 +903,8 @@ zlib/trees.o: zlib/trees.c zlib/deflate.h zlib/zutil.h zlib/zlib.h \
   zlib/zconf.h zlib/trees.h
 zlib/uncompr.o: zlib/uncompr.c zlib/zlib.h zlib/zconf.h
 zlib/zutil.o: zlib/zutil.c zlib/zutil.h zlib/zlib.h zlib/zconf.h
+pykml.o: pykml.c defs.h config.h queue.h gbtypes.h zlib/zlib.h \
+  zlib/zconf.h gbfile.h cet.h cet_util.h inifile.h
+
 internal_styles.c: mkstyle.sh style/arc.style style/cambridge.style style/csv.style style/cup.style style/custom.style style/dna.style style/fugawi.style style/garmin301.style style/garmin_poi.style style/geonet.style style/gpsdrive.style style/gpsdrivetrack.style style/gpsman.style style/kompass_tk.style style/kompass_wp.style style/ktf2.style style/kwf2.style style/mapconverter.style style/mxf.style style/nima.style style/openoffice.style style/s_and_t.style style/saplus.style style/sportsim.style style/tabsep.style style/tomtom_asc.style style/tomtom_itn.style style/xmap2006.style style/xmap.style style/xmapwpt.style
 	./mkstyle.sh > internal_styles.c || (rm -f internal_styles.c ; exit 1)
