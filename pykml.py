@@ -1,6 +1,8 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 # Format converter module using Python.
 
-# Copyright (C) 2007 Marc Poulhiès, marc.poulhies@imag.fr
+# Copyright (C) 2007 Marc PoulhiÃ¨s, marc.poulhies@imag.fr
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -154,6 +156,7 @@ class Track:
             pm = ET.SubElement(folder, "Placemark")
 
             ET.SubElement(pm, "name").text = "sample placemark"
+            ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s" %(prev.creat, prev.vspeed, prev.speed)
         
             style = ET.SubElement(pm, "Style")
             ET.SubElement(style, "color").text = "FF001EFF"

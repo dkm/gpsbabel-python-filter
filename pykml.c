@@ -151,7 +151,7 @@ pykml_track_disp(const waypoint *waypointp)
     PyTuple_SetItem(pArgs, 4, Py_None);
   }
 
-  if WAYPT_HAS(waypointp, speed)
+  if WAYPT_HAS(waypointp, vspeed)
   {
     PyTuple_SetItem(pArgs, 5, PyFloat_FromDouble(waypointp->vspeed)); 
   } else {
@@ -186,6 +186,7 @@ pykml_wr_init(const char *fname)
 
   if (pModule == NULL) {
     printf("Oh no, we don't have the module!\n");
+    exit(-1);
   }
 
   pClass = PyObject_GetAttrString(pModule, "Track");
