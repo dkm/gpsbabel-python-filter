@@ -509,7 +509,7 @@ void track_recompute(const route_head *trk, computed_trkdata **trkdatap)
 
 	QUEUE_FOR_EACH((queue *)&trk->waypoint_list, elem, tmp) {
 		time_t timed;
-		double tlat, tlon, plat, plon, dist;
+		double tlat, tlon, plat, plon, dist, ddist;
 
 		this = (waypoint *)elem;
 		timed = this->creation_time - prev->creation_time;
@@ -524,6 +524,7 @@ void track_recompute(const route_head *trk, computed_trkdata **trkdatap)
 		WAYPT_SET(this, course, heading_true_degrees(plat, plon,
 			tlat, tlon));
 		dist = radtometers(gcdist(plat, plon, tlat, tlon));
+		ddist = this->altitude - prev->altitude;
 
 		/* 
 		 * Avoid that 6300 mile jump as we move from 0,0.
@@ -543,6 +544,10 @@ void track_recompute(const route_head *trk, computed_trkdata **trkdatap)
 			if (this->speed < tdata->min_spd) {
 				tdata->min_spd = this->speed;
 			}
+		}
+
+		if (timed) {
+		  WAYPT_SET(this, vspeed, ddist/labs(timed));
 		}
 
 		if ((this->altitude > 0) && (this->altitude < tdata->min_alt)) {
