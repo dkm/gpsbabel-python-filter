@@ -134,16 +134,29 @@ class Track:
                                                             self.min_vz_wpt.lat,
                                                             self.min_vz_wpt.alt)
 
+    def addKmlHeader(self, node):
+        style = ET.SubElement(node, "Style")
+        lstyle = ET.SubElement(style, "LineStyle")
+        
+        color = ET.SubElement(lstyle, "color")
+        width = ET.SubElement(lstyle, "width")
+        color.text = "7f0000ff"
+        width.text = "5"
+
     def getKML(self):
         sio = cStringIO.StringIO()
 
         sio.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         kmlroot = ET.Element("kml", {'xmlns':'http://earth.google.com/kml/2.1'})
 
+        #         doc = ET.SubElement(kmlroot, "Document")
+
+
         folder = ET.SubElement(kmlroot, "Folder")
         ET.SubElement(folder, "name").text = "Test PyKML module"
         ET.SubElement(folder, "description").text = "Sample descro"
 
+        self.addKmlHeader(folder)
 
         self.addFlightInfo(folder)
 
@@ -158,9 +171,9 @@ class Track:
             ET.SubElement(pm, "name").text = "sample placemark"
             ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s" %(prev.creat, prev.vspeed, prev.speed)
         
-            style = ET.SubElement(pm, "Style")
-            ET.SubElement(style, "color").text = "FF001EFF"
-            ET.SubElement(style, "width").text = "2"
+#             style = ET.SubElement(pm, "Style")
+#             ET.SubElement(style, "color").text = "FF001EFF"
+#             ET.SubElement(style, "width").text = "5"
 
             ls = ET.SubElement(pm, "LineString")
             ET.SubElement(ls, "tessellate").text = "1"
