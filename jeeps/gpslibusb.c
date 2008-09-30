@@ -1,7 +1,7 @@
 /*
     Physical/OS USB layer to talk to libusb.
 
-    Copyright (C) 2004, 2005, 2006, 2007, 2008  Robert Lipe, robertlipe@usa.net
+    Copyright (C) 2004, 2005, 2006 Robert Lipe, robertlipe@usa.net
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -46,7 +46,6 @@
 
 typedef struct {
 	struct usb_bus *busses;
-	unsigned product_id;
 } libusb_unit_data;
 
 /* 
@@ -82,7 +81,7 @@ char ** os_get_garmin_mountpoints()
 	dlist[1] = NULL;
 	return dlist;
 }
-#else
+#elif
 char ** os_get_garmin_mountpoints() 
 {
 	return NULL;
@@ -155,7 +154,7 @@ gusb_atexit_teardown(void)
 
 
 /*
- * This was a function of great joy to discover...and even greater to maintain.
+ * This is a function of great joy to discover.
  *
  * It turns out that as of 5/2006, every Garmin USB product has a problem
  * where the device does not reset the data toggles after a configuration
@@ -173,22 +172,9 @@ gusb_atexit_teardown(void)
  * it seems to cure this at a mere cost of complexity and startup time.  I'll
  * be delighted when all the firmware gets revved and updated and we can
  * remove this.
- *
- * 9/2008 But wait, there's more.   The very toggle reset that we *had* to 
- * implement in 2006 to make non-Windows OSes work actually locks up verion
- * 2.70 of the Venture HC.   On that model, the second product request 
- * (you know, the one that we *use*, locks that device's protocol stack
- * after the RET2INTR that immediately follows the REQBLK (and why is it
- * telling us to go into bulk mode followed by an immeidate EOF, anyway?)
- * that follows the request for product ID.   100% reproducible on Mac and
- * Linux.    Of course, we don't see this on the Windows system becuase
- * we don't have to jump through hooops to clear the spec-violating out
- * of state toggles there becuase those systems see only one configuration
- * set ever.
- *
- * Grrrr!
+ *  
  */
-unsigned 
+static void 
 gusb_reset_toggles(void)
 {
 	static const char  oinit[12] = 
@@ -197,7 +183,6 @@ gusb_reset_toggles(void)
 		{20, 0, 0, 0, 0xfe, 0, 0, 0, 0, 0, 0, 0};
 	garmin_usb_packet iresp;
 	int t;
-	unsigned rv = 0;
 
 	/* Start off with three session starts.
 	 * #1 resets the bulk out toggle.  It may not make it to the device.
@@ -234,7 +219,6 @@ gusb_reset_toggles(void)
 	 * pipe, this does nothing interesting, but on devices that respon
 	 * on the bulk pipe this will reset the toggles on the bulk in.
  	 */
-
 	t = 10;
 	gusb_cmd_send((const garmin_usb_packet *) oid, sizeof(oid));
 	while(1) {
@@ -244,24 +228,20 @@ gusb_reset_toggles(void)
 
 		gusb_cmd_get(&iresp, sizeof(iresp));
 
-		if (le_read16(iresp.gusb_pkt.pkt_id) == 0xff) {
-			rv = le_read16(iresp.gusb_pkt.databuf+0);
-		}
-
-		if (le_read16(iresp.gusb_pkt.pkt_id) == 0xfd) return rv;
+		if (le_read16(iresp.gusb_pkt.pkt_id) == 0xfd) return;
 		if (t-- <= 0) {
 			fatal("Could not start session in a reasonable number of tries.\n");
 		}
 	}
-	return 0;
 }
 
 void
-garmin_usb_start(struct usb_device *dev, libusb_unit_data *lud)
+garmin_usb_start(struct usb_device *dev)
 {
 	int i;
 
 	if (udev) return;
+
 	udev = usb_open(dev);
 	atexit(gusb_atexit_teardown);
 
@@ -269,17 +249,6 @@ garmin_usb_start(struct usb_device *dev, libusb_unit_data *lud)
 	/*
 	 * Hrmph.  No iManufacturer or iProduct headers....
 	 */
-
-	
-#if __APPLE__
-	// On Leopard, if we don't do an explicit set_configuration, some
-	// devices will work only the first time after a reset.
-	if (usb_set_configuration(udev, 1) < 0) {
-		fatal("usb_set_configuration failed: %s\n", usb_strerror());
-	};
-#endif
-
-#if 0
 	if (usb_set_configuration(udev, 1) < 0) {
 #if __linux__
 		char drvnm[128];
@@ -296,27 +265,12 @@ garmin_usb_start(struct usb_device *dev, libusb_unit_data *lud)
 		fatal("usb_set_configuration failed: %s\n", usb_strerror());
 #endif
 	}
-#endif
+
 	if (usb_claim_interface(udev, 0) < 0) {
 		fatal("Claim interfaced failed: %s\n", usb_strerror());
 	}
 
 	libusb_llops.max_tx_size = dev->descriptor.bMaxPacketSize0;
-
-	/*
-	 * About 5% of the time on OS/X (Observed on 10.5.4 on Intel Imac
-	 * with Venture HC) we get a dev with a valid vendor ID, but no
-	 * associated configuration.  I was unable to see a single instance
-	 * of this on a 276, a 60CS, a 60CSx, an SP310, or an Edge 305, leading
- 	 * me to think this is some kind of bug in the Venture HC.
-	 * 
-	 * Rather than crash, we at least print
-	 * a nastygram.  Experiments with retrying various USB ops brought
-	 * no joy, so just call fatal and move on.
-	 */
-	if (!dev->config) {
-		fatal("Found USB device with no configuration.\n");
-	}
 
 	for (i = 0; i < dev->config->interface->altsetting->bNumEndpoints; i++) {
 		struct usb_endpoint_descriptor * ep;
@@ -326,13 +280,13 @@ garmin_usb_start(struct usb_device *dev, libusb_unit_data *lud)
 #define EA(x) x & USB_ENDPOINT_ADDRESS_MASK
 			case USB_ENDPOINT_TYPE_BULK:
 				if (ep->bEndpointAddress & USB_ENDPOINT_DIR_MASK)
-					gusb_bulk_in_ep = (EA(ep->bEndpointAddress)) | USB_ENDPOINT_IN;
+					gusb_bulk_in_ep = EA(ep->bEndpointAddress);
 				else
 					gusb_bulk_out_ep = EA(ep->bEndpointAddress);
 				break;
 			case USB_ENDPOINT_TYPE_INTERRUPT:
 				if (ep->bEndpointAddress & USB_ENDPOINT_DIR_MASK)
-					gusb_intr_in_ep = (EA(ep->bEndpointAddress)) | USB_ENDPOINT_IN;
+					gusb_intr_in_ep = EA(ep->bEndpointAddress);
 				break;
 		}
 	}
@@ -342,17 +296,8 @@ garmin_usb_start(struct usb_device *dev, libusb_unit_data *lud)
 	 * that loop without non-zero values for all three, we're hosed.
 	 */
 	if (gusb_intr_in_ep && gusb_bulk_in_ep && gusb_bulk_out_ep) {
-		lud->product_id = gusb_reset_toggles();
-		switch (lud->product_id) {
-			// Search for "Venture HC" for more on this siliness..
-			// It's a case instead of an 'if' becuase I have a 
-			// feeling there are more affected models either
-			// on the market or on the way.
-			case 695: break;   // Venture HC
-			case 285: break;   // GPSMap 276C/4.80
-			case 402: break;   // GPSMap 396C/4.50
-			default: gusb_syncup();
-		}
+		gusb_reset_toggles();
+		gusb_syncup();
 		return;
 	}
 
@@ -371,19 +316,21 @@ int garmin_usb_scan(libusb_unit_data *lud, int req_unit_number)
 		struct usb_device *dev;
 
 		for (dev = bus->devices; dev; dev = dev->next) {
-			/* 
-			 * Exclude Mass Storage devices (CO, OR, Nuvi, etc.) 
-			 * from this scan.
-			 * At least on Mac, bDeviceClass isn't 
-			 * USB_MASS_STORAGE as it should be (perhaps because
-			 * the storage driver has already bound to it?) so
-			 * we fondle only the proprietary class devices.
+			/* Probably too promiscious of a match, but since
+			 * Garmin doesn't document the _proper_ matching,
+			 * we just take the easy way out for now.
+			 * Unfortunatey, blowing on DeviceClass == Mass storage
+			 * doesn't work on CO, at least.
 			 */
-			if (dev->descriptor.idVendor == GARMIN_VID && 
-			    dev->config &&
-				dev->descriptor.bDeviceClass == USB_CLASS_VENDOR_SPEC ) {
+			if (dev->descriptor.idVendor == GARMIN_VID) {
+				switch (dev->descriptor.idProduct) {
+					case 0x19:  // Nuvi;
+					case 0x2244:  // Zumo;
+					case 0x2295:  // CO;
+						continue;
+				}
 				if (req_unit_number < 0) {
-					garmin_usb_start(dev, lud);	
+					garmin_usb_start(dev);	
 					/* 
 					 * It's important to call _close
 					 * here since the bulk/intr models
@@ -393,7 +340,7 @@ int garmin_usb_scan(libusb_unit_data *lud, int req_unit_number)
 					gusb_close(NULL);
 				} else 
 				if (req_unit_number == found_devices)
-					garmin_usb_start(dev, lud);	
+					garmin_usb_start(dev);	
 				found_devices++;
 			}
 		}
@@ -433,7 +380,6 @@ gusb_init(const char *portname, gpsdevh **dh)
 {
 	int req_unit_number = 0;
 	libusb_unit_data *lud = xcalloc(sizeof (libusb_unit_data), 1);
-
 	*dh = (gpsdevh*) lud;
 
 // usb_set_debug(99);
@@ -448,6 +394,7 @@ gusb_init(const char *portname, gpsdevh **dh)
 			req_unit_number = atoi(portname + 4);
 		}
 	}
+
 	usb_find_busses();
 	usb_find_devices();
 	lud->busses = usb_get_busses();
