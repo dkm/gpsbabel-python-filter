@@ -41,30 +41,63 @@ class ComputedTrkData:
 
 
 class Waypoint:
-    def __init__(self, lat, longi, alt, creat, speed, vspeed):
+    def __init__(self, lat, longi, alt, creat, speed, vspeed, acc=None):
         self.lat = lat
         self.longi = longi
         self.alt = alt
         self.creat = creat
         self.speed = speed
         self.vspeed = vspeed
-        print self.lat, self.longi, self.alt, self.creat, self.speed, self.vspeed
+        self.acc = acc
+##        print self.lat, self.longi, self.alt, self.creat, self.speed, self.vspeed
 
 class Track:
-    def __init__(self):
+    def __init__(self, usewii=False):
+        print "PY init track!"
+        self.debugfile = open("pykml.debug.data", "w")
         self.waypts=[]
         self.trkdata = None
+        print "init track bis!"
+        self.wm = None
 
         self.max_speed_wpt = None
         self.max_vz_wpt = None
         self.min_vz_wpt = None
 
         self.max_alt_wpt = None
-        
-    def addPoint(self, lat, long, alt, creat, speed, vspeed):
-        wp = Waypoint(lat, long, alt, creat, speed, vspeed)
-        self.waypts.append(wp)
+        self.usewii = usewii
 
+        if self.usewii :
+            import cwiid
+            self.wiimote_hwaddr = "00:1D:BC:3B:2D:C3"
+            print "You have a few secs to sync with wm..."
+            self.wm = cwiid.Wiimote(self.wiimote_hwaddr)
+            if self.wm != None:
+                print "Ok!"
+            else:
+                print "Woohoo, we have a problem!"
+            self.rpt_mode = 0
+            self.rpt_mode ^= cwiid.RPT_ACC
+            self.wm.rpt_mode = self.rpt_mode
+            st = self.wm.state
+            print "ac data at boot: ", st['acc']
+
+        print "end of track init!"
+
+    def addPoint(self, lat, long, alt, creat, speed, vspeed):
+        print "add point"
+        if self.wm == None:
+            wp = Waypoint(lat, long, alt, creat, speed, vspeed)
+            print >>self.debugfile, "%s:: %f,%f,%f %.4s %.4s" %(long, lat, alt, creat, speed, vspeed)
+        else:
+            st = self.wm.state
+            wp = Waypoint(lat, long, alt, creat, speed, vspeed, st['acc'])
+            print "%s|%f,%f,%f|%.4s|%.4s|%s" %(long, lat, alt, creat, speed, vspeed, str(st['acc']))
+            print >>self.debugfile, "%s|%f,%f,%f|%.4s|%.4s|%s" %(long, lat, alt, creat, speed, vspeed, str(st['acc']))
+            self.debugfile.flush()
+
+        self.waypts.append(wp)
+        
         if speed != None and (self.max_speed_wpt == None or self.max_speed_wpt.speed <= speed):
             self.max_speed_wpt = wp
 
@@ -144,6 +177,7 @@ class Track:
         width.text = "5"
 
     def getKML(self):
+        print "getKML!!"
         sio = cStringIO.StringIO()
 
         sio.write('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -158,7 +192,7 @@ class Track:
 
         self.addKmlHeader(folder)
 
-        self.addFlightInfo(folder)
+        ##self.addFlightInfo(folder)
 
         folder = ET.SubElement(folder, "Folder")
         ET.SubElement(folder, "name").text = "Simple track"
@@ -169,7 +203,10 @@ class Track:
             pm = ET.SubElement(folder, "Placemark")
 
             ET.SubElement(pm, "name").text = "sample placemark"
-            ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s" %(prev.creat, prev.vspeed, prev.speed)
+            if prev.acc == None:
+                ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s" %(prev.creat, prev.vspeed, prev.speed)
+            else:
+                ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s\nacc[x]: %.4d\nacc[y]: %.4d\nacc[z]: %.4d" %(prev.creat, prev.vspeed, prev.speed, prev.acc[0],prev.acc[1],prev.acc[2])
         
 #             style = ET.SubElement(pm, "Style")
 #             ET.SubElement(style, "color").text = "FF001EFF"
@@ -184,9 +221,10 @@ class Track:
 
             prev = next
 
-
+        print "getKML!! 2"
         tree = ET.ElementTree(kmlroot)
         tree.write(sio)
-
+        print "getKML!! 3"
+##        print sio.getvalue()
         return sio.getvalue()
 

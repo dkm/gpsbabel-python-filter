@@ -44,6 +44,8 @@ arglist_t pykml_args[] = {
 * %%%        global callbacks called by gpsbabel main process              %%% *
 *******************************************************************************/
 
+static int is_rt_tracking = 0;
+
 static void
 pykml_rd_init(const char *fname)
 {
@@ -95,6 +97,9 @@ static FILE* fout;
 static PyObject *pModule;
 static PyObject *pTrack;
 
+/*
+ *  write Header for output
+ */
 static void 
 pykml_track_hdr(const route_head *header) 
 {
@@ -128,11 +133,10 @@ pykml_track_hdr(const route_head *header)
 
   //  fprintf(fout, "header\n");
 }
-
-static void 
-pykml_track_disp(const waypoint *waypointp)
+static void
+pykml_add_point_in_py(const waypoint *waypointp)
 {
-  PyObject *pArgs, *pValue, *pClass;
+  PyObject *pArgs, *pClass; /* *pValue */
   
   pClass = PyObject_GetAttrString(pTrack, "addPoint");
 
@@ -159,13 +163,25 @@ pykml_track_disp(const waypoint *waypointp)
     PyTuple_SetItem(pArgs, 5, Py_None);
   }
 
-  pValue = PyObject_CallObject(pClass, pArgs);
+  PyObject_CallObject(pClass, pArgs);
 
   Py_DECREF(pArgs);
-  Py_DECREF(pValue);
+  //  Py_DECREF(pValue);
   Py_DECREF(pClass);
 }
 
+/*
+ * called for each point in a track
+ */
+static void 
+pykml_track_disp(const waypoint *waypointp)
+{
+  pykml_add_point_in_py(waypointp);
+}
+
+/*
+ * trailer for track writing
+ */
 static void 
 pykml_track_tlr(const route_head *header) 
 {
@@ -185,53 +201,166 @@ pykml_wr_init(const char *fname)
   Py_DECREF(pModuleName);
 
   if (pModule == NULL) {
-    printf("Oh no, we don't have the module!\n");
+    printf("Error while loading 'pykml' python module."
+	   "Check your PYTHONPATH env var !\n");
     exit(-1);
   }
 
   pClass = PyObject_GetAttrString(pModule, "Track");
-  pTrack = PyInstance_New(pClass, NULL, NULL);
+  if (is_rt_tracking == 1){
+    printf("RT tracking active\n");
+    PyObject *pArgs = PyTuple_New(1);
+    PyTuple_SetItem(pArgs, 0, Py_True);
+    pTrack = PyInstance_New(pClass, pArgs, NULL);
+    Py_DECREF(pArgs);
+  } else {
+    printf("RT tracking not active\n");
+    pTrack = PyInstance_New(pClass, NULL, NULL);
+  }
+
+  if (pTrack == NULL){
+    fprintf(stderr, "Can't instantiate pTrack object!\n");
+    exit (-1);
+  }
+    
 
   Py_DECREF(pClass);
   fout = xfopen(fname, "w", MYNAME);
+  printf("fout open\n");
   
 //	fout = gbfopen(fname, "w", MYNAME);
 }
 
+/*
+ * cleanup after writting
+ */
 static void
 pykml_wr_deinit(void)
 {
+  printf("wr_deinit\n");
   Py_DECREF(pTrack);
   Py_DECREF(pModule);
 
   Py_Finalize();
+  printf("fout close\n");
   fclose(fout);
 //	gbfclose(fout);
 }
 
-static void
-pykml_write(void)
-{
+static char *
+pykml_get_and_write_kml(void){
   PyObject *retStr, *pMethod;
   char *str;
-// Here is how you register callbacks for all waypoints, routes, tracks.
-//  waypt_disp_all(pykml_py_wrap);
-//  route_disp_all(pykml_track_hdr, pykml_track_tlr, pykml_track_disp);
-  track_disp_all(pykml_track_hdr, pykml_track_tlr, pykml_track_disp);
+
+  printf("get_and_write\n");
   pMethod = PyObject_GetAttrString(pTrack, "getKML");
   retStr = PyObject_CallObject(pMethod, NULL);
+  printf("Calling track.getKML method,..\n");
+  fflush(NULL);
+
+  if(retStr == NULL){
+    printf("looks like we have a prob\n");
+    exit(-1);
+  }
   str = PyString_AsString(retStr);
 
+  printf("pykml get andd write before wr!\n");
+  fflush(NULL);
+  
   fprintf(fout, str);
 
   Py_DECREF(retStr);
   Py_DECREF(pMethod);
+  printf("pykml write finished\n");
+  fflush(NULL);
+
+}
+
+
+/*
+ * called when output is to be written
+ */
+static void
+pykml_write(void)
+{
+// Here is how you register callbacks for all waypoints, routes, tracks.
+//  waypt_disp_all(pykml_py_wrap);
+//  route_disp_all(pykml_track_hdr, pykml_track_tlr, pykml_track_disp);
+  printf("starting write,..\n");
+  fflush(NULL);
+
+  /* fills the py track */
+  track_disp_all(pykml_track_hdr, pykml_track_tlr, pykml_track_disp);
+
+  pykml_get_and_write_kml();
 }
 
 static void
 pykml_exit(void)		/* optional */
 {
 }
+
+
+
+/*
+ * stuff for RT tracking
+ */
+
+static void
+pykml_dummy_trkdata(void){
+  PyObject *pMethod, *pArgs, *pValue;
+
+  pMethod = PyObject_GetAttrString(pTrack, "setComputedTrackData");
+
+  pArgs = PyTuple_New(12);
+
+  PyTuple_SetItem(pArgs, 0, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 1, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 2, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 3, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 4, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 5, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 6, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 7, PyLong_FromUnsignedLong(0));
+  PyTuple_SetItem(pArgs, 8, PyLong_FromUnsignedLong(0));
+  PyTuple_SetItem(pArgs, 9, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 10, PyFloat_FromDouble(0));
+  PyTuple_SetItem(pArgs, 11, PyFloat_FromDouble(0));
+
+  pValue = PyObject_CallObject(pMethod, pArgs);
+
+  Py_DECREF(pValue);
+  Py_DECREF(pMethod);
+  Py_DECREF(pArgs);
+}
+
+static void
+pykml_wr_position_init(const char *fname)
+{
+  is_rt_tracking = 1;
+  printf("wr posn init !!\n");
+  pykml_wr_init(fname);
+}
+
+static void
+pykml_wr_position(waypoint *wpt)
+{
+  printf("wr_position\n");
+  pykml_add_point_in_py(wpt);  
+}
+
+static void
+pykml_wr_position_deinit(void)
+{
+  //  pykml_dummy_trkdata();
+  printf("wr posn deinit, calling write!!\n");
+  pykml_get_and_write_kml();
+  printf("finish write, deinit now\n");
+  fflush(NULL);
+
+  pykml_wr_deinit();
+}
+
 
 /**************************************************************************/
 
@@ -249,7 +378,8 @@ ff_vecs_t pykml_vecs = {
 	pykml_write,
 	pykml_exit,
 	pykml_args,
-	CET_CHARSET_ASCII, 0			/* ascii is the expected character set */
+	CET_CHARSET_ASCII, 0,			/* ascii is the expected character set */
 						/* not fixed, can be changed through command line parameter */
+	{ NULL, NULL, NULL, pykml_wr_position_init, pykml_wr_position, pykml_wr_position_deinit }
 };
 /**************************************************************************/
