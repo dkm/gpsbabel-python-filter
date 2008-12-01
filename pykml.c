@@ -29,12 +29,20 @@
 #define MYNAME "pykml"
 
 
+static char *opt_moteaddr = NULL;
+static char *opt_debug = NULL;
+
 // Any arg in this list will appear in command line help and will be 
 // populated for you.
 // Values for ARGTYPE_xxx can be found in defs.h and are used to 
 // select the type of option.
 static
 arglist_t pykml_args[] = {
+  {"wiimote", &opt_moteaddr, "HW address of the wiimote to use",
+   "00:1D:BC:3B:2D:C3", ARGTYPE_STRING, ARG_NOMINMAX},
+  {"debug", &opt_debug, "Enable debug output in pykml.debug file",
+   "0", ARGTYPE_BOOL, ARG_NOMINMAX},
+
 // {"foo", &fooopt, "The text of the foo option in help", 
 //   "default", ARGYTPE_STRING, ARG_NOMINMAX} , 
 	ARG_TERMINATOR

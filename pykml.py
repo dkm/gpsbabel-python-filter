@@ -66,6 +66,7 @@ class Track:
 
         self.max_alt_wpt = None
         self.usewii = usewii
+        self.acc_data = None
 
         if self.usewii :
             import cwiid
@@ -76,6 +77,8 @@ class Track:
                 print "Ok!"
             else:
                 print "Woohoo, we have a problem!"
+            self.acc_zero, self.acc_one = self.wm.get_acc_cal(cwiid.EXT_NONE)
+
             self.rpt_mode = 0
             self.rpt_mode ^= cwiid.RPT_ACC
             self.wm.rpt_mode = self.rpt_mode
@@ -84,6 +87,19 @@ class Track:
 
         print "end of track init!"
 
+
+    def acc_normalize(self, acc):
+        r = []
+        for i in xrange(3):
+            zero = self.acc_zero[i]
+            one = self.acc_one[i]
+            u = one-zero
+            v = acc[i]
+            
+            r.append(float(v-zero)/u)
+            
+        return r
+
     def addPoint(self, lat, long, alt, creat, speed, vspeed):
         print "add point"
         if self.wm == None:
@@ -91,9 +107,10 @@ class Track:
             print >>self.debugfile, "%s:: %f,%f,%f %.4s %.4s" %(long, lat, alt, creat, speed, vspeed)
         else:
             st = self.wm.state
-            wp = Waypoint(lat, long, alt, creat, speed, vspeed, st['acc'])
-            print "%s|%f,%f,%f|%.4s|%.4s|%s" %(long, lat, alt, creat, speed, vspeed, str(st['acc']))
-            print >>self.debugfile, "%s|%f,%f,%f|%.4s|%.4s|%s" %(long, lat, alt, creat, speed, vspeed, str(st['acc']))
+            acc_n = self.acc_normalize(st['acc'])
+            wp = Waypoint(lat, long, alt, creat, speed, vspeed, acc_n)
+            print "%s|%f,%f,%f|%.4s|%.4s|%s" %(long, lat, alt, creat, speed, vspeed, str(acc_n))
+            print >>self.debugfile, "%s|%f,%f,%f|%.4s|%.4s|%s" %(long, lat, alt, creat, speed, vspeed, str(acc_n))
             self.debugfile.flush()
 
         self.waypts.append(wp)
