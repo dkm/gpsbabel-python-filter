@@ -34,22 +34,22 @@
  For info about the used log format:
   <http://spreadsheets.google.com/pub?key=pyCLH-0TdNe-5N-5tBokuOA&gid=5>
 
- Example usage::
-   
-   # Read from USB port, output in GPX format   
+  Module updated 2008-2009. Now also handles Holux M-241 and 
+  Holux GR-245 aka. GPSport-245 devices. These devices have small differences
+  in the log format and use a lower baudrate to transfer the data.
+
+ Example usage::  
+   # Read from USB port, output trackpoints & waypoints in GPX format   
   ./gpsbabel -D 2 -t -w -i mtk -f /dev/ttyUSB0 -o gpx -F out.gpx
   
-   # Parse an existing .bin file (data_2007_09_04.bin), output as 
-   #  both CSV file and GPX
-  ./gpsbabel -D 2 -t -w -i mtk-bin,csv=data__2007_09_04.csv -f data_2007_09_04.bin -o gpx -F out.gpx
+   # Parse an existing .bin file (data_2007_09_04.bin), output trackpoints as 
+   #  both CSV file and GPX, discard points without fix
+  ./gpsbabel -D 2 -t -i mtk-bin,csv=data__2007_09_04.csv -f data_2007_09_04.bin -x discard,fixnone -o gpx -F out.gpx
 
+  Tip: Check out the -x height,wgs84tomsl filter to correct the altitude. 
   Todo:
-    o Create a testsuit of .bin to .gpx/csv files
-    o More documentation ? 
     o ....    
  
-    
-
  */
 
 #include "defs.h"
@@ -103,6 +103,15 @@ static const unsigned char LOG_RST[16] = {
     0x00, 0x00, 0x00, 0x00, 0x00,       /* data */
     0xbb, 0xbb, 0xbb, 0xbb };          /* end marker */
 
+static const char *MTK_ACK[] = { /* Flags returned from PMTK001 ack packet */
+  "Invalid packet", "Unsupported packet type", 
+  "Valid packet but action failed", "Valid packet, action success" };
+
+#define MTK_EVT_BITMASK  (1<<0x02)
+#define MTK_EVT_PERIOD   (1<<0x03)
+#define MTK_EVT_DISTANCE (1<<0x04)
+#define MTK_EVT_SPEED    (1<<0x05)
+#define MTK_EVT_START    (1<<0x07)
 
 /* *************************************** */
 
@@ -170,28 +179,46 @@ struct data_item {
    float height;
    float speed;
    float heading;
-   short dsta; // differential station
-   float dage;  // differential ...
+   short dsta; // differential station id
+   float dage;  // differential data age
    float pdop, hdop, vdop;
-   char sat_used, sat_view;
+   char sat_used, sat_view, sat_count;
    short rcr;
    unsigned short timestamp_ms;
    double distance;
    struct sat_info sat_data[32];      
 } data_item;
 
+struct mtk_loginfo {
+   unsigned int bitmask;
+   int logLen;
+   int period, distance, speed; /* in 10:ths of sec, m, km/h */
+   int track_event;
+} mtk_loginfo;
+
 /* *************************************** */
 
-#define TIMEOUT        1000
+/* MTK chip based devices with different baudrate, tweaks, ... */ 
+enum MTK_DEVICE_TYPE {
+    MTK_LOGGER, 
+    HOLUX_M241, 
+    HOLUX_GR245
+};
+
+#define TIMEOUT        1500
 #define MTK_BAUDRATE 115200
+#define MTK_BAUDRATE_M241 38400
+
+#define HOLUX245_MASK (1 << 27)
 
 static void *fd;  /* serial fd */
 static FILE *fl;  /* bin.file fd */
 static char *port; /* serial port name */
 static char *erase;  /* erase ? command option */
 static char *csv_file; /* csv ? command option */
-static unsigned int bmask = 0x000e0e7f;
+static enum MTK_DEVICE_TYPE mtk_device = MTK_LOGGER;
 
+struct mtk_loginfo mtk_info;
 
 const char LIVE_CHAR[4] = {'-', '\\','|','/'};
 const char TEMP_DATA_BIN[]= "data.bin";
@@ -201,15 +228,17 @@ const char CMD_LOG_DISABLE[]= "$PMTK182,5*20\r\n";
 const char CMD_LOG_ENABLE[] = "$PMTK182,4*21\r\n";
 const char CMD_LOG_FORMAT[] = "$PMTK182,2,2*39\r\n";
 const char CMD_LOG_ERASE[]  = "$PMTK182,6,1*3E\r\n";
+const char CMD_LOG_STATUS[] = "$PMTK182,2,7*3C\r\n";
 
-
+static int  mtk_log_len(unsigned int bitmask);
+static void mtk_rd_init(const char *fname);
 static void file_init(const char *fname);
 static void file_deinit(void) ;
 static void file_read(void);
+static int mtk_parse_info(const unsigned char *data, int dataLen);
 
 
-
-// Arguments for logg fetch 'mtk' command..
+// Arguments for log fetch 'mtk' command..
 
 static arglist_t mtk_sargs[] = {
     { "erase", &erase, "Erase device data after download",
@@ -223,7 +252,8 @@ static void dbg(int l, const char *msg, ...) {
     va_list ap;
     va_start(ap, msg);
     if (global_opts.debug_level >= l) {
-        vprintf(msg, ap);
+        vfprintf(stderr,msg, ap);
+        fflush(stderr);
     }
     va_end(ap);
 }
@@ -238,7 +268,8 @@ static int do_send_cmd(const char *cmd, int cmdLen) {
    return cmdLen;
 }
 
-static int do_cmd(const char *cmd, const char *expect, time_t timeout_sec) {
+
+static int do_cmd(const char *cmd, const char *expect, char **rslt, time_t timeout_sec) {
    char line[256];
    int len, done, loops, cmd_erase;
    int expect_len;
@@ -258,9 +289,8 @@ static int do_cmd(const char *cmd, const char *expect, time_t timeout_sec) {
    cmd_erase = 0;
    if  ( strncmp(cmd, CMD_LOG_ERASE, 12) == 0 ){
       cmd_erase = 1;
-      if (global_opts.debug_level > 0 ) {
-         dbg(1, "Erasing    "); 
-         fflush(stdout); 
+      if (global_opts.verbose_status || global_opts.debug_level > 0) {
+         fprintf(stderr, "Erasing    ");
       }
    }
    // dbg(6, "## Send '%s' -- Expect '%s' in %d sec\n", cmd, expect, timeout_sec);
@@ -277,7 +307,7 @@ static int do_cmd(const char *cmd, const char *expect, time_t timeout_sec) {
         if ( rc == gbser_TIMEOUT && time(NULL) > tout ){
            dbg(2, "NMEA command '%s' timeout !\n", cmd);
            return -1;
-           // fatal(MYNAME ":%s() Read error (%d)\n", __FUNCTION__, rc);
+           // fatal(MYNAME "do_cmd(): Read error (%d)\n", rc);
         }
         len = -1;
     } else {
@@ -285,19 +315,42 @@ static int do_cmd(const char *cmd, const char *expect, time_t timeout_sec) {
     }
     loops++;
     dbg(8, "Read %d bytes: '%s'\n", len, line);
-    if ( cmd_erase && global_opts.debug_level > 0 && global_opts.debug_level <= 3 ){ 
+    if ( cmd_erase && (global_opts.verbose_status || (global_opts.debug_level > 0 && global_opts.debug_level <= 3)) ){ 
        // erase cmd progress wheel -- only for debug level 1-3 
-       printf("\b%c", LIVE_CHAR[loops%4]); fflush(stdout);
+       fprintf(stderr,"\b%c", LIVE_CHAR[loops%4]); fflush(stderr);
     }
       if ( len > 5 && line[0] == '$' ){
          if ( expect_len > 0 && strncmp(&line[1], expect, expect_len) == 0 ){
-            if ( cmd_erase && global_opts.debug_level > 0 ) printf("\n");
+            if ( cmd_erase && (global_opts.verbose_status || global_opts.debug_level > 0) ) fprintf(stderr,"\n");
             dbg(6, "NMEA command success !\n");
+            if ( (len - 4) > expect_len ){ // alloc and copy data segment...
+               if ( line[len-3] == '*' ) 
+                  line[len-3] = '\0';
+               // printf("Data segment: #%s#\n", &line[expect_len+1]);
+               if ( rslt ){
+                  *rslt = xmalloc(len-3-expect_len+1);
+                 strcpy(*rslt, &line[expect_len+1]);
+               }
+            }
             done = 1;
+          } else if ( strncmp(line, "$PMTK", 5) == 0 ){
+             /* A quick parser for ACK packets */
+             if ( !cmd_erase && strncmp(line, "$PMTK001,", 9) == 0 && line[9] != '\0' ){ 
+                char *pType, *pRslt;
+                int pAck;
+                pType = &line[9];
+                pRslt = strchr(&line[9], ',') + 1;
+                if ( memcmp(&cmd[5], pType, 3) == 0 && pRslt != NULL && *pRslt != '\0' ){
+                   pAck = *pRslt - '0';
+                   if ( pAck != 3 && pAck >= 0 && pAck < 4 ){ // Erase will return '2'
+                      dbg(1, "NMEA command '%s' failed - %s\n", cmd, MTK_ACK[pAck]);
+                      return -1;
+                   }
+                }
+                   
+             } 
+             dbg(6, "RECV: '%s'\n", line);
           }
-           else if ( strncmp(line, "$PMTK", 5) == 0 ){
-               dbg(6, "RECV: '%s'\n", line);
-           }
           
       }
       if ( !done && time(NULL) > tout ){
@@ -305,12 +358,16 @@ static int do_cmd(const char *cmd, const char *expect, time_t timeout_sec) {
            return -1;
       }
    }  while ( len != 0 && loops > 0 && !done );
-   return 0;
+   return done?0:1;
 }
 
 /*******************************************************************************
 * %%%        global callbacks called by gpsbabel main process              %%% *
 *******************************************************************************/
+static void mtk_rd_init_m241 (const char *fname) {
+    mtk_device = HOLUX_M241;
+    mtk_rd_init(fname);
+}
 
 static void mtk_rd_init(const char *fname){
     int rc;
@@ -325,15 +382,28 @@ static void mtk_rd_init(const char *fname){
     // verify that we have a MTK based logger...
     dbg(1, "Verifying MTK based device...\n");
 
-    if ((rc = gbser_set_port(fd, MTK_BAUDRATE, 8, 0, 1))) {
+    switch ( mtk_device ){
+       case HOLUX_M241:
+       case HOLUX_GR245:    
+          log_type[LATITUDE].size = log_type[LONGITUDE].size = 4;
+          log_type[HEIGHT].size = 3;
+          rc = gbser_set_port(fd, MTK_BAUDRATE_M241, 8, 0, 1);
+          break;
+       case MTK_LOGGER:
+       default:    
+          rc = gbser_set_port(fd, MTK_BAUDRATE, 8, 0, 1);
+          break;
+    }      
+    if (rc) {
         dbg(1, "Set baud rate to %d failed (%d)\n", MTK_BAUDRATE, rc);
         fatal(MYNAME ": Failed to set baudrate !\n");
     }
-    rc = do_cmd("$PMTK604*30\r\n", "PMTK704", 6);
-    if ( rc != 0 )
-      fatal(MYNAME ": This is not a MTK based GPS ! (or is it turned off ?)\n");
 
-}
+    rc = do_cmd("$PMTK605*31\r\n", "PMTK705", NULL, 10);
+    if ( rc != 0 )
+      fatal(MYNAME ": This is not a MTK based GPS ! (or is device turned off ?)\n");
+
+ }
 
 static void mtk_rd_deinit(void){
     dbg(3, "Closing port...\n");
@@ -342,21 +412,40 @@ static void mtk_rd_deinit(void){
     xfree(port);
 }
 
-int mtk_erase(void){
+static int mtk_erase(void){
+   int log_status, log_mask, err;
+   char *lstatus = NULL;
+  
+  log_status = 0;
+  // check log status - is logging disabled ?
+  do_cmd(CMD_LOG_STATUS, "PMTK182,3,7,", &lstatus, 2);
+  if ( lstatus ){
+      log_status = atoi(lstatus);
+      dbg(3, "LOG Status '%s'\n", lstatus);
+      xfree(lstatus);
+      lstatus = NULL;
+   }
+
+  do_cmd(CMD_LOG_FORMAT, "PMTK182,3,2,", &lstatus, 2);
+  if ( lstatus ){
+      log_mask = strtoul(lstatus, NULL, 16);
+      dbg(3, "LOG Mask '%s' - 0x%.8x \n", lstatus, log_mask);
+      xfree(lstatus);
+      lstatus = NULL;
+   }
    
    dbg(1, "Start flash erase..\n");
-   do_cmd(CMD_LOG_DISABLE, "PMTK001,182,5,3", 1);
-   gb_sleep(10*1000);
-
-   do_cmd(CMD_LOG_FORMAT, "PMTK182,3,2", 2);
+   do_cmd(CMD_LOG_DISABLE, "PMTK001,182,5,3", NULL, 1);
    gb_sleep(10*1000);
 
    // Erase log....
-   do_cmd(CMD_LOG_ERASE, "PMTK001,182,6", 30);
+   do_cmd(CMD_LOG_ERASE, "PMTK001,182,6", NULL, 30);
    gb_sleep(100*1000);
 
-   do_cmd(CMD_LOG_ENABLE, "PMTK001,182,4,3", 2);
-
+   if ( (log_status & 2) ){ // auto-log were enabled before..re-enable log.
+      err = do_cmd(CMD_LOG_ENABLE, "PMTK001,182,4,3", NULL, 2);
+      dbg(3, "re-enable log %s\n", err==0?"Success":"Fail");
+   }
    return 0;
 }
 
@@ -364,10 +453,13 @@ static void mtk_read(void){
   char cmd[256];
   char *line = NULL;
   unsigned char crc, *data = NULL;
-  int cmdLen, j, bsize, i, len, ff_len, rc, init_scan; 
+  int cmdLen, j, bsize, i, len, ff_len, rc, init_scan, retry_cnt, log_enabled;
   unsigned int line_size, data_size, data_addr, addr, addr_max;
   FILE *dout;
-  
+  char *fusage = NULL;
+
+  log_enabled = 0;
+  init_scan = 0;
   dout = fopen(TEMP_DATA_BIN, "wb");
   if ( dout == NULL ){
      fatal(MYNAME ": Can't create temporary file %s", TEMP_DATA_BIN);
@@ -375,11 +467,38 @@ static void mtk_read(void){
   }
   dbg(1, "Download %s -> %s\n", port, TEMP_DATA_BIN);
 
-  i = do_cmd(CMD_LOG_DISABLE, "PMTK001,182,5,3", 2);
-  dbg(3, " ---- LOG DISABLE ---- %s\n", i==0?"Success":"Fail");
-        
-  addr_max = 0x200000-64*1024;  // 16Mbit/2Mbyte/32x64kByte block.
-  init_scan = 1;
+  // check log status - is logging disabled ?
+  do_cmd(CMD_LOG_STATUS, "PMTK182,3,7,", &fusage, 2);
+   if ( fusage ){
+      log_enabled = (atoi(fusage) & 2)?1:0;
+      dbg(3, "LOG Status '%s' -- log %s \n", fusage, log_enabled?"enabled":"disabled");
+      xfree(fusage);
+      fusage = NULL;
+   }
+
+   gb_sleep(10*1000);
+   if ( 1 || log_enabled ){
+      i = do_cmd(CMD_LOG_DISABLE, "PMTK001,182,5,3", NULL, 2);
+      dbg(3, " ---- LOG DISABLE ---- %s\n", i==0?"Success":"Fail");
+   }
+   gb_sleep(100*1000);
+  
+  addr_max = 0;
+  // get flash usage, current log address..cmd only works if log disabled.
+   do_cmd("$PMTK182,2,8*33\r\n", "PMTK182,3,8,", &fusage, 2);
+   if ( fusage ){
+     addr_max = strtoul(fusage, NULL, 16);
+     if ( addr_max > 0 ) 
+        addr_max =  addr_max - addr_max%65536 + 65535;
+     xfree(fusage);
+   }  
+  
+  if ( addr_max == 0 ) { // get flash usage failed...      
+    addr_max = 0x200000-64*1024;  // 16Mbit/2Mbyte/32x64kByte block. -- fixme Q1000-ng has 32Mbit 
+    init_scan = 1;
+  }
+  dbg(1, "Download %dkB from device\n", (addr_max+1) >> 10);
+
   bsize = 0x0400;
   addr  = 0x0000;
 
@@ -393,7 +512,7 @@ static void mtk_read(void){
   }
   memset(line, '\0', line_size);
   memset(data, '\0', data_size);
-
+  retry_cnt = 0;
   
   while ( init_scan || addr < addr_max ) {
      // generate - read address NMEA command, add crc.
@@ -403,13 +522,19 @@ static void mtk_read(void){
        crc ^= cmd[i];
      
      cmdLen += snprintf(&cmd[cmdLen], sizeof(cmd)-cmdLen,  "*%.2X\r\n", crc);
+mtk_retry:
      do_send_cmd(cmd, cmdLen);
 
       memset(line, '\0', line_size);
       do {
          rc = gbser_read_line(fd, line, line_size-1, TIMEOUT, 0x0A, 0x0D);
          if ( rc != gbser_OK) {
-             fatal(MYNAME ":%s() Read error (%d)\n", __FUNCTION__, rc);
+            if ( rc == gbser_TIMEOUT && retry_cnt < 3 ){
+               dbg(2, "\nRetry %d at 0x%.8x\n", retry_cnt, addr);
+               retry_cnt++;
+               goto mtk_retry;
+            } // else
+            fatal(MYNAME "mtk_read(): Read error (%d)\n", rc);
          }
          len = strlen(line);
          dbg(8, "Read %d bytes: '%s'\n", len, line);
@@ -417,6 +542,7 @@ static void mtk_read(void){
          if ( len > 0 ) {
             line[len] = '\0';
             if ( strncmp(line, "$PMTK182,8", 10) == 0 ){//  $PMTK182,8,00005000,FFFFFFF
+               retry_cnt = 0;
                data_addr = strtoul(&line[11], NULL, 16);
                fseek(dout, data_addr, SEEK_SET);
                i = 20;
@@ -457,21 +583,27 @@ static void mtk_read(void){
             addr = 0x0000;
          }
       } else {
-         int perc;
          addr += bsize;
-         perc = 100 - 100*(addr_max-addr)/addr_max;
-         if ( addr >= addr_max ) 
-           perc = 100;
-         dbg(2, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bReading 0x%.6x %3d %%", addr, perc); fflush(stdout);
+         if ( global_opts.verbose_status || global_opts.debug_level >= 2 ){
+            int perc;
+            perc = 100 - 100*(addr_max-addr)/addr_max;
+            if ( addr >= addr_max ) 
+              perc = 100;
+            fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bReading 0x%.6x %3d %%", addr, perc);
+         }
       }
   }
   if ( dout != NULL )
      fclose(dout);
-   dbg(2, "\n");
+   if ( global_opts.verbose_status || global_opts.debug_level >= 2 )
+      fprintf(stderr,"\n");
 
-  i = do_cmd(CMD_LOG_ENABLE, "PMTK001,182,4,3", 2);
-  dbg(3, " ---- LOG ENABLE ----%s\n", i==0?"Success":"Fail");
-  
+  if ( log_enabled ){
+     i = do_cmd(CMD_LOG_ENABLE, "PMTK001,182,4,3", NULL, 2);
+     dbg(3, " ---- LOG ENABLE ----%s\n", i==0?"Success":"Fail");
+  } else {
+     dbg(1, "Note !!! -- Logging is DISABLED !\n");
+  }
   if ( line != NULL )
      xfree(line);
   if ( data != NULL )
@@ -495,39 +627,46 @@ static int add_trackpoint(int idx, unsigned long bmask, struct data_item *itm){
     char     wp_name[20];
     waypoint *trk = waypt_new();
 
-    if ( trk_head == NULL ){
+    if ( global_opts.masked_objective & TRKDATAMASK && (trk_head == NULL || (mtk_info.track_event & MTK_EVT_START) ) ){
+        char spds[50];
         trk_head = route_head_alloc();
-        track_add_head(trk_head);
-    } 
+        xasprintf(&trk_head->rte_name, "track-%d", 1+track_count() );
 
-    sprintf(wp_name, "TP%04d", idx);
+        spds[0] = '\0';
+        if ( mtk_info.speed > 0 )
+           sprintf(spds, " when moving above %.0f km/h", mtk_info.speed/10.);
+        xasprintf(&trk_head->rte_desc, "Log every %.0f sec, %.0f m%s"
+           , mtk_info.period/10., mtk_info.distance/10., spds);
+        track_add_head(trk_head);
+    }
 
     if ( bmask & (1<<LATITUDE) && bmask & (1<<LONGITUDE) ){
        trk->latitude       = itm->lat;
        trk->longitude      = itm->lon;
     } else {
-      return -1; // GPX requires lat/lon...
-    }  
+       return -1; // GPX requires lat/lon...
+    }
 
-    if ( bmask & (1<<HEIGHT) )
+    if ( bmask & (1<<HEIGHT) ){
        trk->altitude       = itm->height;
-    
+    }
     trk->creation_time  = itm->timestamp; // in UTC..
-    if ( bmask & (1<<MILLISECOND) ) 
+    if ( bmask & (1<<MILLISECOND) )
        trk->microseconds  = MILLI_TO_MICRO(itm->timestamp_ms);
-    
+
     if ( bmask & (1<<PDOP) )
-       trk->pdop = itm->pdop; 
+       trk->pdop = itm->pdop;
     if ( bmask & (1<<HDOP) )
-       trk->hdop = itm->hdop; 
+       trk->hdop = itm->hdop;
     if ( bmask & (1<<VDOP) )
-       trk->vdop = itm->vdop; 
+       trk->vdop = itm->vdop;
 
-    if ( bmask & (1<<HEADING) )
-       trk->course = itm->heading; 
-    if ( bmask & (1<<SPEED) )
-       trk->speed = itm->speed; 
-
+    if ( bmask & (1<<HEADING) ){
+       WAYPT_SET(trk, course, itm->heading);
+    }
+    if ( bmask & (1<<SPEED) ){
+       WAYPT_SET(trk, speed, KPH_TO_MPS(itm->speed));
+    }
     if ( bmask & (1<<VALID) ){
        switch (itm->valid){
          case 0x0040: trk->fix = fix_unknown;break; /* Estimated mode */
@@ -536,22 +675,49 @@ static int add_trackpoint(int idx, unsigned long bmask, struct data_item *itm){
          case 0x0004: trk->fix = fix_dgps;   break;
          case 0x0008: trk->fix = fix_pps;    break; /* Military GPS */
 
-         case 0x0010: /* "RTK" */  
-         case 0x0020: /* "FRTK" */ 
+         case 0x0010: /* "RTK" */
+         case 0x0020: /* "FRTK" */
          case 0x0080: /* "Manual input mode"  */
          case 0x0100: /* "Simulator";*/
-         default:      
+         default:
             trk->fix = fix_unknown;
             break;
        }
-    }   
+      /* This is a flagrantly bogus position; don't queue it.
+       * The 747 does log some "real" positions with fix_none, though,
+       * so keep those.
+       */
+      if ((trk->fix == fix_unknown || trk->fix == fix_none)  &&
+          trk->latitude - 90.0 < .000001 && trk->longitude < 0.000001) {
+        waypt_free(trk);
+        return -1;
+      }
+    }
     if ( bmask & (1<<NSAT) )
        trk->sat = itm->sat_used;
-       
-    trk->shortname      = xstrdup(wp_name);
-    
-    track_add_wpt(trk_head, trk);
-    
+
+    // RCR is a bitmask of possibly several log reasons..
+    if ( global_opts.masked_objective & WPTDATAMASK
+       && bmask & (1<<RCR) && itm->rcr & 0x0008  )
+    {
+       /* Button press -- create waypoint, start count at 1 */
+       waypoint *w = waypt_dupe(trk);
+
+       sprintf(wp_name, "WP%06d", waypt_count()+1);
+       w->shortname      = xstrdup(wp_name);
+       waypt_add(w);
+    }
+    // In theory we would not add the waypoint to the list of
+    // trackpoints. But as the MTK logger restart the
+    // log session from the button press we would loose a
+    // trackpoint unless we include/duplicate it.
+
+    if ( global_opts.masked_objective & TRKDATAMASK ){
+       sprintf(wp_name, "TP%06d", idx);
+       trk->shortname      = xstrdup(wp_name);
+
+       track_add_wpt(trk_head, trk);
+    }
     return 0;
 }
 
@@ -579,7 +745,7 @@ static void mtk_csv_init(char *csv_fname, unsigned long bitmask){
     gbfprintf(cd, "INDEX,%s%s", ((1<<RCR) & bitmask)?"RCR,":"",
         ((1<<UTC) & bitmask)?"DATE,TIME,":"" );
    for (i=0;i<32;i++){
-      if ( (1<<i) & bmask ){
+      if ( (1<<i) & bitmask ){
          switch (i){
             case RCR:
             case UTC:
@@ -602,7 +768,7 @@ static void mtk_csv_init(char *csv_fname, unsigned long bitmask){
                break;
          }
       }
-      if ( i == SNR && (1<<SID) & bmask )
+      if ( i == SNR && (1<<SID) & bitmask )
          gbfprintf(cd, "),");
    }
    gbfprintf(cd, "\n");
@@ -619,7 +785,7 @@ static void mtk_csv_deinit(void){
 static int csv_line(gbfile *csvFile, int idx, unsigned long bmask, struct data_item *itm){
    struct tm *ts_tm;
    char ts_str[30];
-   char *fix_str = "";
+   const char *fix_str = "";
 
    ts_tm = gmtime(&(itm->timestamp));
    strftime(ts_str, sizeof(ts_str)-1, "%Y/%m/%d,%H:%M:%S", ts_tm);
@@ -682,22 +848,20 @@ static int csv_line(gbfile *csvFile, int idx, unsigned long bmask, struct data_i
    if ( bmask & (1<<SID) ){
       int l, slen, do_sc = 0;
       char sstr[40];
-      for (l=0;l<32;l++){
-         if ( itm->sat_data[l].id > 0 ){
-            slen = 0;
-            slen += sprintf(&sstr[slen], "%s%.2d" 
-              , itm->sat_data[l].used?"#":""
-              , itm->sat_data[l].id);
-            if ( bmask & (1<<ELEVATION) ) 
-               slen += sprintf(&sstr[slen], "-%.2d", itm->sat_data[l].elevation);
-            if ( bmask & (1<<AZIMUTH) ) 
-               slen += sprintf(&sstr[slen], "-%.2d", itm->sat_data[l].azimut);
-            if ( bmask & (1<<SNR) ) 
-               slen += sprintf(&sstr[slen], "-%.2d", itm->sat_data[l].snr);
-         
-            gbfprintf(csvFile, "%s%s" , do_sc?";":"", sstr);
-            do_sc = 1;   
-         }
+      for (l=0;l<itm->sat_count;l++){
+         slen = 0;
+         slen += sprintf(&sstr[slen], "%s%.2d" 
+           , itm->sat_data[l].used?"#":""
+           , itm->sat_data[l].id);
+         if ( bmask & (1<<ELEVATION) ) 
+            slen += sprintf(&sstr[slen], "-%.2d", itm->sat_data[l].elevation);
+         if ( bmask & (1<<AZIMUTH) ) 
+            slen += sprintf(&sstr[slen], "-%.2d", itm->sat_data[l].azimut);
+         if ( bmask & (1<<SNR) ) 
+            slen += sprintf(&sstr[slen], "-%.2d", itm->sat_data[l].snr);
+
+         gbfprintf(csvFile, "%s%s" , do_sc?";":"", sstr);
+         do_sc = 1;   
       }
       gbfprintf(csvFile, ",");
    }
@@ -713,9 +877,19 @@ static int csv_line(gbfile *csvFile, int idx, unsigned long bmask, struct data_i
 /********************* MTK Logger -- Parse functions *********************/
 int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
    static int count = 0;
-   int i, k, sat_id;
-   unsigned char crc;
+   int i, k, sat_id, hspd;
+   unsigned char crc, hbuf[4];
    struct data_item itm;
+
+   dbg(5,"Entering mtk_parse, count = %i, dataLen = %i\n", count, dataLen);
+   if ( global_opts.debug_level > 5 ) {
+	   int j;
+	   fprintf(stderr,"# Data block:");
+	   for(j=0;j<dataLen;j++)
+		   fprintf(stderr,"%.2x ", data[j]);
+	   fprintf(stderr,"\n");
+	   fflush(stderr);
+   }
 
    memset(&itm, 0, sizeof(itm));    
    i = 0;
@@ -729,16 +903,48 @@ int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
             itm.valid = le_read16(data + i);
             break;
          case 1<<LATITUDE: 
-            itm.lat = endian_read_double(data + i, 1 /* le */);
+            if ( log_type[LATITUDE].size == 4 ) {
+               itm.lat = endian_read_float(data + i, 1 /* le */); // M-241
+            } else {
+               itm.lat = endian_read_double(data + i, 1 /* le */);
+            }
             break;
         case 1<<LONGITUDE: 
-            itm.lon = endian_read_double(data + i, 1 /* le */);
+            if ( log_type[LONGITUDE].size == 4 ) {
+               itm.lon = endian_read_float(data + i, 1 /* le */); // M-241
+            } else {
+               itm.lon = endian_read_double(data + i, 1 /* le */);
+            }
             break;
-         case 1<<HEIGHT:
-            itm.height = endian_read_float(data + i, 1 /* le */);
+        case 1<<HEIGHT:
+            switch ( mtk_device ){
+               case HOLUX_GR245: // Stupid Holux GPsport 245 - log speed as centimeters/sec. (in height position !) 
+                  hspd = data[i] + data[i+1]*0x100 + data[i+2]*0x10000 + data[i+2]*0x1000000;
+                  itm.speed =  MPS_TO_KPH(hspd)/100.; // convert to km/h..
+                  break;
+               case HOLUX_M241:
+                  hbuf[0] = 0x0;
+                  hbuf[1] = *(data + i);
+                  hbuf[2] = *(data + i + 1);
+                  hbuf[3] = *(data + i + 2);
+                  itm.height = endian_read_float(hbuf, 1 /* le */);
+                  break;
+                case MTK_LOGGER:
+                default:
+                  itm.height = endian_read_float(data + i, 1 /* le */);
+                  break;
+            }
             break;
          case 1<<SPEED: 
-            itm.speed = endian_read_float(data + i, 1 /* le */);
+            if ( mtk_device == HOLUX_GR245 ){ // Stupid Holux GPsport 245 - log height in speed position...
+               hbuf[0] = 0x0;
+               hbuf[1] = *(data + i);
+               hbuf[2] = *(data + i + 1);
+               hbuf[3] = *(data + i + 2);
+               itm.height = endian_read_float(hbuf, 1 /* le */);
+            } else {
+               itm.speed = endian_read_float(data + i, 1 /* le */);
+            }
             break;
          case 1<<HEADING: 
             itm.heading = endian_read_float(data + i, 1 /* le */);
@@ -764,50 +970,45 @@ int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
             break;
          case 1<<SID:
             {
-               int dLeft, l, sat_count, sid_size, sat_idx;
-               
-               // calculate data length after SID fields
-               dLeft = 0;
-               for (l = SNR; l <= DISTANCE; l++) {
-                  if (bmask && (1 << l))
-	             dLeft += log_type[l].size;
-               }
-               sat_count = 0;
-               if ( dLeft > 0 )
-                  sat_count = le_read16(data + i + 2);
+               int sat_count, sat_idx, sid_size, l;
+
+               sat_count = le_read16(data + i + 2);
                if ( sat_count > 32 )
                   sat_count = 32; // this can't happen ? or...
-              
-               sid_size = log_type[SID].size;
-               if ( bmask & (1<<ELEVATION) )
-                   sid_size += log_type[ELEVATION].size;
-                if ( bmask & (1<<AZIMUTH) )
-                   sid_size += log_type[AZIMUTH].size;
-                if ( bmask & (1<<SNR) )
-                   sid_size += log_type[SNR].size;
 
+               itm.sat_count = sat_count;
+               sid_size = log_type[SID].size;
+               if ( sat_count > 0 ){ // handle 'Zero satellites in view issue'
+                  if ( bmask & (1<<ELEVATION) )
+                      sid_size += log_type[ELEVATION].size;
+                   if ( bmask & (1<<AZIMUTH) )
+                      sid_size += log_type[AZIMUTH].size;
+                   if ( bmask & (1<<SNR) )
+                      sid_size += log_type[SNR].size;
+               }
                l = 0;
                sat_idx = 0;
-               while ( sat_count > 0 ){
+               do {
                   sat_id = data[i];
                   itm.sat_data[sat_idx].id   = sat_id;
                   itm.sat_data[sat_idx].used = data[i + 1];
                   // get_word(&data[i+2], &smask); // assume - nr of satellites...
-
-                  if ( bmask & (1<<ELEVATION) )
-                     itm.sat_data[sat_idx].elevation = le_read16(data + i + 4);
-                  if ( bmask & (1<<AZIMUTH) )
-                     itm.sat_data[sat_idx].azimut = le_read16(data + i + 6);
-                  if ( bmask & (1<<SNR) )
-                     itm.sat_data[sat_idx].snr    = le_read16(data + i + 8);
-
+                  
+                  if ( sat_count > 0 ){
+                     if ( bmask & (1<<ELEVATION) )
+                        itm.sat_data[sat_idx].elevation = le_read16(data + i + 4);
+                     if ( bmask & (1<<AZIMUTH) )
+                        itm.sat_data[sat_idx].azimut = le_read16(data + i + 6);
+                     if ( bmask & (1<<SNR) )
+                        itm.sat_data[sat_idx].snr    = le_read16(data + i + 8);
+                  }
                   sat_idx++;
                   // duplicated checksum and length calculations...for simplicity...
                   for (l = 0; l < sid_size; l++)
 	             crc ^= data[i + l];
                   i += sid_size;
                   sat_count--;
-               } /* End: while ( sat_count > 0 ) */
+               } while ( sat_count > 0 );
             }
             continue; // dont do any more checksum calc..
             break;   
@@ -826,6 +1027,10 @@ int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
          case 1<<DISTANCE:         
             itm.distance = endian_read_double(data + i, 1 /* le */);
             break;
+         default:
+             // if ( ((1<<k) & bmask) ) 
+             //   printf("Unknown ID %d: %.2x %.2x %.2x %.2x\n", k, data[i], data[i+1], data[i+2], data[i+3]);
+             break;           
       } /* End: switch (bmap) */
 
       /* update item checksum and length */
@@ -836,24 +1041,23 @@ int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
          i += log_type[k].size;
       }
    } /* for (bmap,...) */
-   
-   if ( data[i] != '*' ) {
-      if ( global_opts.debug_level > 0 ) {
-         int j;
-         printf("Missing '*' !\n");
-         for(j=0;j<dataLen;j++)
-            printf("%.2x ", data[j]);
-         printf("\n");
-      }
-      if ( data[0] == 0xaa && data[1] == 0xaa && data[2] == 0xaa && data[3] == 0xaa ){
-         printf(" --- Log restart ?? skip 16 bytes ---\n");
-         return 16;
-      }
+ 
+   if ( mtk_device == MTK_LOGGER ){  // Holux skips '*' checksum separator
+      if ( data[i] == '*' )
+         i++; // skip '*' separator
+      else 
+         dbg(1,"Missing '*' !\n");   
    }
+   if ( memcmp(&data[0], &LOG_RST[0], 6) == 0 
+        && memcmp(&data[12], &LOG_RST[12], 4) == 0  )
+   {
+      mtk_parse_info(data, dataLen);
+      dbg(1," Missed Log restart ?? skipping 16 bytes\n");
+      return 16;
+   }    
 
-   i++; // skip '*' separator
    if ( data[i] != crc ){
-      printf("%2d: Bad CRC %.2x != %.2x\n", count, data[i], crc);
+      dbg(0,"%2d: Bad CRC %.2x != %.2x\n", count, data[i], crc);
    }
    i++; // crc         
    count++;
@@ -863,12 +1067,13 @@ int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
 
    add_trackpoint(count, bmask, &itm);
 
+   mtk_info.track_event = 0;
    return i;
 }
 
 /* 
   Description: Parse an info block 
-  Globals: bmask - may be affected if updated.
+  Globals: mtk_info - bitmask/period/speed/... may be affected if updated.
  */
 static int mtk_parse_info(const unsigned char *data, int dataLen){
    unsigned short cmd;
@@ -884,31 +1089,44 @@ static int mtk_parse_info(const unsigned char *data, int dataLen){
          case 0x02:
             bm = le_read32(data + 8);
             dbg(1, "# Log bitmask is: %.8x\n", bm);
-            if ( bmask != bm )
-               dbg(1," ########## Bitmask Change   %.8x -> %.8x ###########\n", bmask, bm);
-            bmask = bm;
+            if ( mtk_device != MTK_LOGGER ) 
+               bm &= 0x7fffffffU;
+            if ( mtk_info.bitmask != bm ){
+               dbg(1," ########## Bitmask Change   %.8x -> %.8x ###########\n", mtk_info.bitmask, bm);
+               mtk_info.track_event |= MTK_EVT_BITMASK;
+            }
+            mtk_info.bitmask = bm;
+            mtk_info.logLen = mtk_log_len(mtk_info.bitmask);
             break;
          case 0x03:
             dbg(1, "# Log period change %.0f sec\n", cmd/10.);
+            mtk_info.track_event |= MTK_EVT_PERIOD;
+            mtk_info.period = cmd;
             break;
          case 0x04:
             dbg(1, "# Log distance change %.1f m\n", cmd/10.);
+            mtk_info.track_event |= MTK_EVT_DISTANCE;
+            mtk_info.distance = cmd;
             break;
          case 0x05:
             dbg(1, "# Log speed change %.1f km/h\n", cmd/10.);
+            mtk_info.track_event |= MTK_EVT_SPEED;
+            mtk_info.speed  = cmd;
             break;
          case 0x06:
             dbg(1, "# Log policy change 0x%.4x\n", cmd);
-            if  ( cmd == 0x01 ) 
+            if  ( cmd == 0x01 )
                dbg(1, "# Log policy change to OVERWRITE\n");
             if  ( cmd == 0x02 ) 
                dbg(1, "# Log policy change to STOP\n");
             break;
          case 0x07:
-            if ( cmd == 0x0106 )
-              ; //  fprintf(stderr,"# GPS Logger# Turned On\n"); // Fixme - start new trk
+            if ( cmd == 0x0106 ){
+               dbg(5, "# GPS Logger# Turned On\n"); // Fixme - start new trk
+               mtk_info.track_event |= MTK_EVT_START;
+            }
             if ( cmd == 0x0104 )
-              ; //  fprintf(stderr,"# GPS Logger# Log disabled\n");
+              dbg(5, "# GPS Logger# Log disabled\n");
             break;
          default:
             dbg(1, "## Unknown INFO 0x%.2x\n", data[7]);
@@ -916,21 +1134,54 @@ static int mtk_parse_info(const unsigned char *data, int dataLen){
       }
    } else {
       if ( global_opts.debug_level > 0 ){
-        printf("#!! Invalid INFO block !! %d bytes\n >> ", dataLen);
+        fprintf(stderr,"#!! Invalid INFO block !! %d bytes\n >> ", dataLen);
         for (bm=0;bm<16;bm++) printf("%.2x ", data[bm]);
-        printf("\n");
+        fprintf(stderr,"\n");
       }
       return 0;
    }
    return 16;
 }
 
+static int mtk_log_len(unsigned int bitmask){
+   int i, len;
+   
+   /* calculate the length of a binary log item. */
+   len = 2; // add '*' + crc, holux would only be +1, oh, well...
+   for (i=0;i<32;i++){
+      if ( (1<<i) & bitmask ){
+         if ( i > DISTANCE )
+            fprintf(stderr, "WARNING: Unknown size/meaning of bit %d\n", i);
+         if ( (i == SID || i == ELEVATION || i == AZIMUTH || i == SNR) && (1<<SID) & bitmask )
+            len += log_type[i].size*32; // worst case, max sat. count..
+         else
+            len += log_type[i].size;
+      }
+   }
+   dbg(3, "Log item size %d bytes\n", len);
+   return len;
+}
+
 /********************** File-in interface ********************************/
+
+static void file_init_m241(const char *fname) {
+    mtk_device = HOLUX_M241;
+    file_init(fname);
+}
 
 static void file_init(const char *fname) {
     dbg(4, "Opening file %s...\n", fname);
     if (fl = fopen(fname, "rb"), NULL == fl) {
         fatal(MYNAME ": Can't open file '%s'\n", fname);
+    }
+    switch (mtk_device){
+       case HOLUX_M241:
+       case HOLUX_GR245:
+          log_type[LATITUDE].size = log_type[LONGITUDE].size = 4;
+          log_type[HEIGHT].size = 3;
+       break;
+       default:
+        break;
     }
 }
 
@@ -939,10 +1190,33 @@ static void file_deinit(void) {
     fclose(fl);
 }
 
+static void holux245_init(void){
+    mtk_device = HOLUX_GR245;
+
+    // stupid workaround for a broken Holux-245 device....
+    // Height & speed have changed position in bitmask and data on Holux 245 Argh !!!
+    log_type[HEIGHT].id   = SPEED;
+    log_type[HEIGHT].size = 4; // speed size - unit: cm/sec
+    log_type[SPEED].id    = HEIGHT;
+    log_type[SPEED].size  = 3; // height size..
+}
+
+static int is_holux_string(const unsigned char *data, int dataLen) {
+   if ( mtk_device != MTK_LOGGER &&
+        dataLen >= 5 &&
+        data[0] == (0xff & 'H') &&
+        data[1] == (0xff & 'O') &&
+        data[2] == (0xff & 'L') &&
+        data[3] == (0xff & 'U') &&
+        data[4] == (0xff & 'X') ) {
+      return 1;
+   }
+   return 0;
+}
 
 static void file_read(void) {
    long fsize, pos;
-   int i, j, k, logLen, bLen;
+   int i, j, k, bLen;
    unsigned char buf[512];
 
    memset(buf, '\0', sizeof(buf));
@@ -976,6 +1250,16 @@ static void file_read(void) {
       unsigned int mask, log_period, log_distance, log_speed;
        
       mask = le_read32(buf + 2);
+      if ( mtk_device != MTK_LOGGER ) { // clear Holux-specific 'low precision' bit
+         mask &= 0x7fffffffU;
+      }
+      if ( mask & HOLUX245_MASK ){
+         // Holux245 semibroken device..
+         mtk_device = HOLUX_GR245; 
+         holux245_init();
+         mask &= ~HOLUX245_MASK;
+      }
+
       // log_policy   = le_read16(buf + 6);
       log_period   = le_read32(buf + 8);
       log_distance = le_read32(buf + 12);
@@ -983,10 +1267,15 @@ static void file_read(void) {
 
       dbg(1, "Default Bitmask %.8x, Log every %.0f sec, %.0f m, %.0f km/h\n", 
           mask, log_period/10., log_distance/10., log_speed/10.);
-      bmask = mask;
-      dbg(3, "Using initial bitmask %.8x for parsing the .bin file\n", bmask); 
-   }
+      mtk_info.bitmask = mask;
+      dbg(3, "Using initial bitmask %.8x for parsing the .bin file\n", mtk_info.bitmask); 
 
+      mtk_info.period = log_period;
+      mtk_info.distance = log_distance;
+      mtk_info.speed  = log_speed;
+   }
+   mtk_info.track_event = 0;
+   
    pos = 0x200; // skip header...first data position 
    fseek(fl, pos, SEEK_SET);  
    
@@ -997,41 +1286,40 @@ static void file_read(void) {
       if ( buf[0] == 0xaa ){ // pre-validate to avoid error...
         j = mtk_parse_info(buf, bLen);
         pos += j;
-      }   
+      } else if  ( is_holux_string(buf, bLen) ) {
+	pos += j;
+        // Note -- Holux245 will have <SP><SP><SP><SP> here...handled below..
+      }
    } while ( j == 16 );
    j = bLen;
    pos += j;
 
-   /* calculate the length of a binary log item. */
-   logLen = 2; // add '*' + crc
-   for (i=0;i<32;i++){
-      if ( (1<<i) & bmask ){
-         if ( (i == SID || i == ELEVATION || i == AZIMUTH || i == SNR) && (1<<SID) & bmask )
-            logLen += log_type[i].size*32; // worst case, max sat. count..
-         else
-            logLen += log_type[i].size;
-      }
-   }
-   dbg(3, "Log item size %d bytes\n", logLen);
+   mtk_info.logLen = mtk_log_len(mtk_info.bitmask);
+   dbg(3, "Log item size %d bytes\n", mtk_info.logLen);
    if ( csv_file && *csv_file )
-      mtk_csv_init(csv_file, bmask);
+      mtk_csv_init(csv_file, mtk_info.bitmask);
 
    while ( pos < fsize && (bLen = fread(&buf[j], 1, sizeof(buf)-j, fl)) > 0 ){
       bLen += j;
       i = 0;
-      while ( (bLen - i) >= logLen ){
+      while ( (bLen - i) >= mtk_info.logLen ){
          k = 0;
-         if ( (bLen - i) >= 16 && memcmp(&buf[i], &LOG_RST[0], 6) == 0 
+         if ( (bLen - i) >= 16 && memcmp(&buf[i], &LOG_RST[0], 6) == 0
               && memcmp(&buf[i+12], &LOG_RST[12], 4) == 0 )
-         {     
+         {
             mtk_parse_info(&buf[i], (bLen-i));
             k = 16;
+         } else if  ( is_holux_string(&buf[i], (bLen - i)) ) {
+            k = 16;
+            // HOLUXGR245LOGGER<SP><SP><SP><SP> or HOLUXGR245WAYPNT<SP><SP><SP><SP>
+            if ( memcmp(&buf[i+16], "    ", 4) == 0 ) // Assume loglen >= 20...
+               k += 4;
          } else if  ( buf[i] == 0xff && buf[i+1] == 0xff  && buf[i+2] == 0xff && buf[i+3] == 0xff
                /* && (pos + 2*logLen) & 0xffff) < logLen */)
          {
             /* End of 64k block segment -- realign to next data area */
 
-            k = ((pos+logLen+1024)/0x10000) *0x10000 + 0x200; 
+            k = ((pos+mtk_info.logLen+1024)/0x10000) *0x10000 + 0x200;
             i = sizeof(buf);
             if ( k <= pos  ) {
               k += 0x10000;
@@ -1047,7 +1335,7 @@ static void file_read(void) {
             pos = k;
             continue; 
          } else {
-           k = mtk_parse(&buf[i], logLen, bmask);
+           k = mtk_parse(&buf[i], mtk_info.logLen, mtk_info.bitmask);
          }
 
          i += k;
@@ -1083,6 +1371,25 @@ ff_vecs_t mtk_vecs = {
 						/* not fixed, can be changed through command line parameter */
 };
 
+ff_vecs_t mtk_m241_vecs = {
+	ff_type_serial,
+	{ 
+		ff_cap_none 	/* waypoints */, 
+	  	ff_cap_read 	/* tracks */, 
+	  	ff_cap_none 	/* routes */
+	},
+	mtk_rd_init_m241,	
+	NULL,	
+	mtk_rd_deinit,	
+	NULL,	
+	mtk_read,
+	NULL,
+	NULL,
+	mtk_sargs,
+	CET_CHARSET_ASCII, 0			/* ascii is the expected character set */
+						/* not fixed, can be changed through command line parameter */
+};
+
 /* used for mtk-bin */
 
 static arglist_t mtk_fargs[] = {
@@ -1095,6 +1402,20 @@ ff_vecs_t mtk_fvecs = {
     ff_type_file,
     { ff_cap_none, ff_cap_read, ff_cap_none },
     file_init,
+    NULL,
+    file_deinit,
+    NULL,
+    file_read,
+    NULL,
+    NULL, 
+    mtk_fargs,
+    CET_CHARSET_UTF8, 1         /* master process: don't convert anything | CET-REVIEW */
+};
+
+ff_vecs_t mtk_m241_fvecs = {
+    ff_type_file,
+    { ff_cap_none, ff_cap_read, ff_cap_none },
+    file_init_m241,
     NULL,
     file_deinit,
     NULL,

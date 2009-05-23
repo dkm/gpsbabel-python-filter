@@ -33,29 +33,17 @@
 /* Define to 1 if you have the `sleep' function. */
 #undef HAVE_SLEEP
 
-/* Define to 1 if you have the <stdint.h> header file. */
-#undef HAVE_STDINT_H
+/* Define if we have va_copy */
+#undef HAVE_VA_COPY
 
-/* Define to 1 if you have the <stdlib.h> header file. */
-#undef HAVE_STDLIB_H
+/* Define if we have __va_copy */
+#undef HAVE___VA_COPY
 
-/* Define to 1 if you have the <strings.h> header file. */
-#undef HAVE_STRINGS_H
+/* Define as 1 if your va_list type is an array */
+#undef HAVE_VA_LIST_AS_ARRAY
 
-/* Define to 1 if you have the <string.h> header file. */
-#undef HAVE_STRING_H
-
-/* Define to 1 if you have the <sys/stat.h> header file. */
-#undef HAVE_SYS_STAT_H
-
-/* Define to 1 if you have the <sys/types.h> header file. */
-#undef HAVE_SYS_TYPES_H
-
-/* Define to 1 if you have the <unistd.h> header file. */
-#undef HAVE_UNISTD_H
-
-/* Name of package */
-#undef PACKAGE
+/* 1 to enable as many formats as possible */
+#undef MAXIMAL_ENABLED
 
 /* Define to the address where bug reports for this package should be sent. */
 #undef PACKAGE_BUGREPORT

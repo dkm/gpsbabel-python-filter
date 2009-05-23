@@ -1,7 +1,7 @@
 unit utils;
 
 {
-    Copyright (C) 2005-2007 Olaf Klein, o.b.klein@gpsbabel.org
+    Copyright (C) 2005-2008 Olaf Klein, o.b.klein@gpsbabel.org
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -116,7 +116,7 @@ begin
   if (Copy(CommandLine, 1, 1) = '~') then
     sCmd := System.Copy(CommandLine, 2, Length(CommandLine) - 1)
   else
-    sCmd := SysUtils.Format('%s %s ', [gpsbabel_exe, CommandLine]);
+    sCmd := SysUtils.Format('"%s" %s ', [gpsbabel_exe, CommandLine]);
 
   SecurityAttr.nLength := sizeof(TSECURITYATTRIBUTES);
   SecurityAttr.bInheritHandle := true;

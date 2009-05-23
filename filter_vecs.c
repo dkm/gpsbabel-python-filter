@@ -44,6 +44,8 @@ extern filter_vecs_t discard_vecs;
 extern filter_vecs_t nuke_vecs;
 extern filter_vecs_t interpolatefilt_vecs;
 extern filter_vecs_t transform_vecs;
+extern filter_vecs_t height_vecs;
+extern filter_vecs_t swapdata_vecs;
 
 static
 fl_vecs_t filter_vec_list[] = {
@@ -118,6 +120,17 @@ fl_vecs_t filter_vec_list[] = {
 		"transform",
 		"Transform waypoints into a route, tracks into routes, ..."
 	},
+	{
+		&height_vecs,
+		"height",
+		"Manipulate altitudes"
+	},
+	{
+		&swapdata_vecs,
+		"swap",
+		"Swap latitude and longitude of all loaded points"
+	},
+	
 #endif
         {
 		NULL,
@@ -146,7 +159,7 @@ find_filter_vec(char *const vecname, char **opts)
 		/* step 1: initialize by inifile or default values */
 		if (vec->vec->args) {
 			for (ap = vec->vec->args; ap->argstring; ap++) {
-				char *temp;
+				const char *temp;
 				
 				temp = inifile_readstr(global_opts.inifile, vec->name, ap->argstring);
 				if (temp == NULL) temp = inifile_readstr(global_opts.inifile, "Common filter settings", ap->argstring);
@@ -195,11 +208,26 @@ free_filter_vec( filter_vecs_t *fvec )
 	
 	if ( fvec->args ) {
 		for ( ap = fvec->args; ap->argstring; ap++) {
-			if (ap->argval && *ap->argval) {
-				xfree(*ap->argval);
-				*ap->argval = NULL;
+			if (ap->argvalptr) {
+				xfree(ap->argvalptr);
+				ap->argvalptr = *ap->argval = NULL;
 			}
 		}
+	}
+}
+
+void 
+init_filter_vecs(void)
+{
+	fl_vecs_t *vec = filter_vec_list;
+	while ( vec->vec ) {
+		arglist_t *ap;
+		if ( vec->vec->args ) {
+			for ( ap = vec->vec->args; ap->argstring; ap++ ) {
+				ap->argvalptr = NULL;
+			}
+		}
+		vec++;
 	}
 }
 
@@ -214,7 +242,6 @@ exit_filter_vecs( void )
 		vec++;
 	}
 }
-		
 
 /*
  *  Display the available formats in a format that's easy for humans to

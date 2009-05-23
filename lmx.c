@@ -31,7 +31,7 @@
 
 static gbfile *ofd;
 static waypoint *wpt_tmp;
-char *link, *linkt;
+char *urllink, *urllinkt;
 
 #define MYNAME "lmx"
 
@@ -90,7 +90,7 @@ lmx_print(const waypoint *wpt)
 	}
 	gbfprintf(ofd, "        </lm:coordinates>\n");
 
-	if (wpt->url) {
+	if (wpt->url && wpt->url[0]) {
 		gbfprintf(ofd, "        <lm:mediaLink>\n");
 		if (wpt->url_link_text)
 			lmx_write_xml(5,"lm:name", wpt->url_link_text);
@@ -205,25 +205,25 @@ lmx_lm_desc(const char *args, const char **unused)
 static void
 lmx_lm_mlink_s(const char *args, const char **unused)
 {
-	link = linkt = NULL;
+	urllink = urllinkt = NULL;
 }
 
 static void
 lmx_lm_link(const char *args, const char **unused)
 {
-	link = xstrdup(args);
+	urllink = xstrdup(args);
 }
 
 static void
 lmx_lm_linkt(const char *args, const char **unused)
 {
-	linkt = xstrdup(args);
+	urllinkt = xstrdup(args);
 }
 
 static void
 lmx_lm_mlink_e(const char *args, const char **unused)
 {
-	waypt_add_url(wpt_tmp, link, linkt);
+	waypt_add_url(wpt_tmp, urllink, urllinkt);
 }
 
 

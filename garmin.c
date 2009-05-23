@@ -22,9 +22,11 @@
 #include <ctype.h>
 #include <limits.h>
 #include "defs.h"
+#include "grtcirc.h"
 #include "jeeps/gps.h"
 #include "garmin_tables.h"
 #include "garmin_fs.h"
+#include "garmin_device_xml.h"
 
 #define SOON 1
 
@@ -43,6 +45,11 @@ static char *snlen = NULL;
 static char *snwhiteopt = NULL;
 static char *deficon = NULL;
 static char *category = NULL;
+static char *categorybitsopt = NULL;
+static int categorybits;
+static int receiver_must_upper = 1;
+
+static ff_vecs_t *gpx_vec;
 
 #define MILITANT_VALID_WAYPT_CHARS "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -64,11 +71,14 @@ arglist_t garmin_args[] = {
 		NULL, ARGTYPE_BOOL, ARG_NOMINMAX},
 	{ "category", &category, "Category number to use for written waypoints", 
 		NULL, ARGTYPE_INT, "1", "16"},
+	{ "bitscategory", &categorybitsopt, "Bitmap of categories", 
+		NULL, ARGTYPE_INT, "1", "65535"},
 	ARG_TERMINATOR
 };
 
 static const char * d103_symbol_from_icon_number(unsigned int n);
 static int d103_icon_number_from_symbol(const char *s);
+
 
 static void
 rw_init(const char *fname)
@@ -104,6 +114,10 @@ rw_init(const char *fname)
 		return;
 	}
 
+	if (categorybitsopt) {
+		categorybits = strtol(categorybitsopt, NULL, 0);
+	}
+
         if (GPS_Init(fname) < 0) {
 		fatal(MYNAME ":Can't init %s\n", fname);
 	}
@@ -112,7 +126,7 @@ rw_init(const char *fname)
 	/*
 	 * Grope the unit we're talking to to set setshort_length to 
 	 * 	20 for  the V, 
-	 * 	10 for Street Pilot, Rhino, 76
+	 * 	10 for Street Pilot, (old) Rhino, 76
 	 * 	6 for the III, 12, emap, and etrex
 	 * Fortunately, getting this "wrong" only results in ugly names
 	 * when we're using the synthesize_shortname path.
@@ -151,6 +165,7 @@ rw_init(const char *fname)
 					break;
 				case 295: 	/* eTrex (yellow, fw v. 3.30) */
 				case 696: 	/* eTrex HC */
+				case 574: 	/* Geko 201 */
 					receiver_short_length = 6;
 					valid_waypt_chars =
 					  MILITANT_VALID_WAYPT_CHARS " +-";
@@ -169,8 +184,9 @@ rw_init(const char *fname)
 				case 292: /* (60|76)C[S]x series */
 				case 421: /* Vista|Legend Cx */
 				case 694: /* Legend HCx */
-				case 695: /* Vista HCx */
+				case 695: /* Vista HC */
 				case 786: /* HC model */
+				case 957: /* Legend HC */
 					receiver_short_length = 14;
 					snwhiteopt = xstrdup("1");
 					receiver_must_upper = 0;
@@ -187,6 +203,15 @@ rw_init(const char *fname)
 					receiver_must_upper = 0;
 					receiver_short_length = 30;
 					receiver_charset = CET_CHARSET_MS_ANSI;
+					break;
+                                case 577: // Rino 530HCx Version 2.50
+                                        receiver_must_upper = 0;
+                                        receiver_short_length = 14;
+                                        break;
+				case 429: // Streetpilot i3
+					receiver_must_upper = 0;
+					receiver_charset = CET_CHARSET_MS_ANSI;
+					receiver_short_length = 30;
 					break;
 				case 260: /* GPSMap 296 */
 				default:
@@ -235,6 +260,20 @@ rw_init(const char *fname)
 }
 
 static void
+rd_init(const char *fname) 
+{
+	if (setjmp(gdx_jmp_buf)) {
+		char *vec_opts = NULL;
+		const gdx_info *gi = gdx_get_info();
+		gpx_vec = find_vec("gpx", &vec_opts);
+		gpx_vec->rd_init(gi->from_device.canon);
+	} else {
+		gpx_vec = NULL;
+		rw_init(fname);
+	}
+}
+
+static void
 rw_deinit(void)
 {
 	if (mkshort_handle) {
@@ -265,6 +304,8 @@ waypt_read(void)
 		wpt->latitude = gps_save_lat;
 		wpt->longitude = gps_save_lon;
 		wpt->shortname = xstrdup("Position");
+		if (gps_save_time)
+			wpt->creation_time = gps_save_time;
 		waypt_add(wpt);
 		return;
 	}
@@ -317,7 +358,43 @@ waypt_read(void)
 		waypt_add(wpt_tmp);
 		GPS_Way_Del(&way[i]);
 	}
-	xfree(way);
+	if (way) {
+		xfree(way);
+	}
+}
+
+static int lap_read_nop_cb(int n, struct GPS_SWay** dp)
+{
+	return 0;
+}
+
+// returns 1 if the waypoint's start_time can be found
+// in the laps array, 0 otherwise
+unsigned int checkWayPointIsAtSplit(waypoint *wpt, GPS_PLap *laps, int nlaps)
+{
+    int result = 0;
+
+    if ((laps != NULL) && (nlaps > 0)) {
+        int i;
+        for (i=(nlaps-1); i >= 0; i--) {
+            GPS_PLap lap = laps[i];
+            time_t delta = lap->start_time - wpt->creation_time;
+            if ((delta >= -1) && (delta <= 1)) {
+                result = 1;
+                break;
+
+            // as an optimization this will stop going through
+            // the lap array when the negative delta gets too
+            // big. It assumes that laps is sorted by time in
+            // ascending order (which appears to be the case for
+            // Forerunners. Don't know about other devices.
+            } else if (delta < -1) {
+                break;
+            }
+        }
+    }
+
+   return result;
 }
 
 static
@@ -332,6 +409,13 @@ track_read(void)
 	int trk_seg_num = 1;
 	char trk_seg_num_buf[10];
 	char *trk_name = "";
+	GPS_PLap* laps = NULL;
+	int nlaps = 0;
+
+	if (gps_lap_type != -1) {
+		nlaps = GPS_Command_Get_Lap(portname, &laps, &lap_read_nop_cb);
+	}
+
 
 	ntracks = GPS_Command_Get_Track(portname, &array, waypt_read_cb);
 
@@ -382,6 +466,8 @@ track_read(void)
 		wpt->cadence = array[i]->cadence;
 		wpt->shortname = xstrdup(array[i]->trk_ident);
 		wpt->creation_time = array[i]->Time;
+                wpt->wpt_flags.is_split = checkWayPointIsAtSplit(wpt, laps,
+                                                                 nlaps);
 		
 		track_add_wpt(trk_head, wpt);
 	}
@@ -429,7 +515,7 @@ route_read(void)
 			if (array[i]->islink)  {
 				continue; 
 			} else {
-				waypoint *wpt_tmp = xcalloc(sizeof (*wpt_tmp), 1);
+				waypoint *wpt_tmp = waypt_new();
 				wpt_tmp->latitude = array[i]->lat;
 				wpt_tmp->longitude = array[i]->lon;
 				wpt_tmp->shortname = array[i]->ident;
@@ -545,8 +631,19 @@ pvt2wpt(GPS_PPvt_Data pvt, waypoint *wpt)
 
 	wpt->altitude = pvt->alt;
 	wpt->latitude = pvt->lat;
-	wpt->longitude = pvt->lon;
-
+        wpt->longitude = pvt->lon;
+	WAYPT_SET(wpt,course,1);
+	WAYPT_SET(wpt,speed,1);
+	/* convert to true course in degrees */
+	if ( pvt->east >= 0.0 )
+		wpt->course = 90 - DEG(atan(pvt->north/pvt->east));
+	else
+		wpt->course = 270 - DEG(atan(pvt->north/pvt->east));
+#if 0
+	/* velocity in m/s */
+	wpt->speed = sqrt(pvt->north*pvt->north + pvt->east*pvt->east);
+	wpt->vs = pvt->up;
+#endif
 	/*
 	 * The unit reports time in three fields:
 	 * 1) The # of days to most recent Sun. since  1989-12-31 midnight UTC.
@@ -628,6 +725,11 @@ pvt_read(posn_status *posn_status)
 static void
 data_read(void)
 {
+	if (gpx_vec) {
+		gpx_vec->read();
+		return;
+	}
+
 	if (poweroff) {
 		return;
 	}
@@ -692,13 +794,13 @@ const char *
 get_gc_info(waypoint *wpt)
 {
 	if (global_opts.smart_names) {
-		if (wpt->gc_data.type == gt_virtual) return  "V ";
-		if (wpt->gc_data.type == gt_unknown) return  "? ";
-		if (wpt->gc_data.type == gt_multi) return  "Mlt ";
-		if (wpt->gc_data.type == gt_earth) return  "EC ";
-		if (wpt->gc_data.type == gt_event) return  "Ev ";
-		if (wpt->gc_data.container == gc_micro) return  "M ";
-		if (wpt->gc_data.container == gc_small) return  "S ";
+		if (wpt->gc_data->type == gt_virtual) return  "V ";
+		if (wpt->gc_data->type == gt_unknown) return  "? ";
+		if (wpt->gc_data->type == gt_multi) return  "Mlt ";
+		if (wpt->gc_data->type == gt_earth) return  "EC ";
+		if (wpt->gc_data->type == gt_event) return  "Ev ";
+		if (wpt->gc_data->container == gc_micro) return  "M ";
+		if (wpt->gc_data->container == gc_small) return  "S ";
 	}
 	return "";
 }
@@ -752,17 +854,19 @@ waypoint_write(void)
 		way[i]->ident[sizeof(way[i]->ident)-1] = 0;
 
 		// If we were explictly given a comment from GPX, use that. 
-		if (wpt->description) {
+		//  This logic really is horrible and needs to be untangled.
+		if (wpt->description && 
+		    global_opts.smart_names && !wpt->gc_data->diff) {
 			memcpy(way[i]->cmnt, wpt->description, strlen(wpt->description));
 		} else {
 			if (global_opts.smart_names && 
-			     wpt->gc_data.diff && wpt->gc_data.terr) {
+			     wpt->gc_data->diff && wpt->gc_data->terr) {
 #if 0
 xasprintf(&src, "%s %s", &wpt->shortname[2], src);
 #endif
 				snprintf(obuf, sizeof(obuf), "%s%d/%d %s", 
 						get_gc_info(wpt),
-						wpt->gc_data.diff, wpt->gc_data.terr, 
+						wpt->gc_data->diff, wpt->gc_data->terr, 
 						src);
 				memcpy(way[i]->cmnt, obuf, strlen(obuf));
 			} else  {
@@ -804,6 +908,9 @@ xasprintf(&src, "%s %s", &wpt->shortname[2], src);
 		}
 		if (category) {
 			way[i]->category = 1 << (atoi(category) - 1);
+		}
+		if (categorybits) {
+			way[i]->category = categorybits;
 		}
 #if SOON
 		garmin_fs_garmin_before_write(wpt, way[i], gps_waypt_type);
@@ -872,8 +979,8 @@ route_waypt_pr(const waypoint *wpt)
 	d = rte->ident;
 	for (s = wpt->shortname; *s; s++) {
 		int c = *s;
-		if (isalpha(c)) c = toupper(c);
-		if (strchr(MILITANT_VALID_WAYPT_CHARS, c)) {
+		if (receiver_must_upper && isalpha(c)) c = toupper(c);
+		if (strchr(valid_waypt_chars, c)) {
 			*d++ = c;
 		}
 	}
@@ -882,7 +989,7 @@ route_waypt_pr(const waypoint *wpt)
 
 	if (wpt->description) {
 		strncpy(rte->cmnt, wpt->description, sizeof(rte->cmnt));
-		rte->cmnt[sizeof(rte->ident)-1] = 0;
+		rte->cmnt[sizeof(rte->cmnt)-1] = 0;
 	} else  {
 		rte->cmnt[0] = 0;
 	}
@@ -981,7 +1088,7 @@ data_write(void)
 ff_vecs_t garmin_vecs = {
 	ff_type_serial,
 	FF_CAP_RW_ALL,
-	rw_init,
+	rd_init,
 	rw_init,
 	rw_deinit,
 	rw_deinit,

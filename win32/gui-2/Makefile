@@ -8,9 +8,9 @@ RC = brcc32.exe
 
 SRC = delphi.pas gnugettext.pas gnugettextD4.pas gnugettextD5.pas \
   gnugettextDx.pas common.pas utils.pas \
-  about.pas filter.pas options.pas main.pas readme.pas select.pas
+  about.pas filter.pas options.pas main.pas select.pas
 
-FRM = about.dfm filter.dfm options.dfm main.dfm readme.dfm select.dfm 
+FRM = about.dfm filter.dfm options.dfm main.dfm select.dfm 
 
 LANG = \
   locale\de\LC_MESSAGES\delphi.mo \
@@ -24,7 +24,10 @@ LANG = \
   locale\fr\LC_MESSAGES\gpsbabel.mo \
   locale\hu\LC_MESSAGES\delphi.mo \
   locale\hu\LC_MESSAGES\default.mo \
-  locale\hu\LC_MESSAGES\gpsbabel.mo
+  locale\hu\LC_MESSAGES\gpsbabel.mo \
+  locale\it\LC_MESSAGES\delphi.mo \
+  locale\it\LC_MESSAGES\default.mo \
+  locale\it\LC_MESSAGES\gpsbabel.mo
 
 .suffixes: .po
 
@@ -54,11 +57,12 @@ GPSBabelGUI.res: GPSBabelGUI.dof dof2rc.exe
 	$(RC) GPSBabelGUI.rc
 
 clean:
-	rm -f *.bak *.dcu *.exe *.mo *.dll *.res *.rc
 	rm -f *.~* *.??~ 
+	rm -f *.bak *.dcu *.exe *.mo *.dll *.res *.rc
 	rm -f readme.html README readme.xml
 	rm -f locale\de\LC_MESSAGES\*.mo
 	rm -f locale\es\LC_MESSAGES\*.mo
 	rm -f locale\fr\LC_MESSAGES\*.mo
 	rm -f locale\hu\LC_MESSAGES\*.mo
+	rm -f locale\it\LC_MESSAGES\*.mo
 

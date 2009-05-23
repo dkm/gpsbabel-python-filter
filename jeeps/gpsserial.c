@@ -208,7 +208,7 @@ int32 GPS_Serial_Write(gpsdevh *dh, const void *obuf, int size)
 	}
 	WriteFile (wsd->comport, obuf, size, &len, NULL);
 	if (len != (DWORD) size) {
-		fatal ("Write error.   Wrote %d of %d bytes.\n", len, size);
+		fatal ("Write error.   Wrote %d of %d bytes.\n", (int)len, size);
 	}
 	return len;
 }
@@ -281,7 +281,7 @@ int32 GPS_Serial_Open(gpsdevh *dh, const char *port)
     tty.c_cc[VMIN] = 1;
     tty.c_cc[VTIME] = 0;
 
-    if(tcsetattr(psd->fd,TCSANOW,&tty)==-1)
+    if(tcsetattr(psd->fd,TCSANOW|TCSAFLUSH,&tty)==-1)
     {
 	GPS_Serial_Error("SERIAL: tcsetattr error");
 	return 0;

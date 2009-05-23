@@ -357,6 +357,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\avltree.c"
+				>
+			</File>
+			<File
 				RelativePath="..\axim_gpb.c"
 				>
 			</File>
@@ -537,6 +541,14 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\destinator.c"
+				>
+			</File>
+			<File
+				RelativePath="..\dg-100.c"
+				>
+			</File>
+			<File
 				RelativePath="..\discard.c"
 				>
 			</File>
@@ -617,11 +629,11 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\fatal.c"
+				RelativePath="..\exif.c"
 				>
 			</File>
 			<File
-				RelativePath="..\filter_skeleton.c"
+				RelativePath="..\fatal.c"
 				>
 			</File>
 			<File
@@ -703,6 +715,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\garmin_device_xml.c"
+				>
 			</File>
 			<File
 				RelativePath="..\garmin_fs.c"
@@ -853,6 +869,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\ggv_ovl.c"
+				>
+			</File>
+			<File
 				RelativePath="..\globals.c"
 				>
 			</File>
@@ -861,7 +881,15 @@
 				>
 			</File>
 			<File
+				RelativePath="..\gnav_trl.c"
+				>
+			</File>
+			<File
 				RelativePath="..\google.c"
+				>
+			</File>
+			<File
+				RelativePath="..\gopal.c"
 				>
 			</File>
 			<File
@@ -1069,6 +1097,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\height.c"
+				>
+			</File>
+			<File
 				RelativePath="..\hiketech.c"
 				>
 			</File>
@@ -1149,11 +1181,23 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\humminbird.c"
+				>
+			</File>
+			<File
 				RelativePath="..\igc.c"
 				>
 			</File>
 			<File
 				RelativePath="..\ignrando.c"
+				>
+			</File>
+			<File
+				RelativePath="..\igo8.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ik3d.c"
 				>
 			</File>
 			<File
@@ -1201,11 +1245,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\itracku.c"
+				>
+			</File>
+			<File
+				RelativePath="..\jtr.c"
+				>
+			</File>
+			<File
 				RelativePath="..\kml.c"
 				>
 			</File>
 			<File
 				RelativePath="Expat\libexpat.lib"
+				>
+			</File>
+			<File
+				RelativePath="..\lmx.c"
 				>
 			</File>
 			<File
@@ -1327,6 +1383,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\mapasia.c"
+				>
 			</File>
 			<File
 				RelativePath="..\mapopolis.c"
@@ -1473,7 +1533,15 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\mmo.c"
+				>
+			</File>
+			<File
 				RelativePath="..\msroute.c"
+				>
+			</File>
+			<File
+				RelativePath="..\mtk_logger.c"
 				>
 			</File>
 			<File
@@ -1514,6 +1582,10 @@
 			</File>
 			<File
 				RelativePath="..\navilink.c"
+				>
+			</File>
+			<File
+				RelativePath="..\navitel.c"
 				>
 			</File>
 			<File
@@ -1594,6 +1666,10 @@
 			</File>
 			<File
 				RelativePath="..\nukedata.c"
+				>
+			</File>
+			<File
+				RelativePath="..\osm.c"
 				>
 			</File>
 			<File
@@ -1941,6 +2017,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\random.c"
+				>
+			</File>
+			<File
 				RelativePath="..\raymarine.c"
 				>
 			</File>
@@ -2057,7 +2137,23 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\sbn.c"
+				>
+			</File>
+			<File
+				RelativePath="..\sbp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\session.c"
+				>
+			</File>
+			<File
 				RelativePath="..\shape.c"
+				>
+			</File>
+			<File
+				RelativePath="..\skyforce.c"
 				>
 			</File>
 			<File
@@ -2146,6 +2242,10 @@
 			</File>
 			<File
 				RelativePath="..\strptime.c"
+				>
+			</File>
+			<File
+				RelativePath="..\swapdata.c"
 				>
 			</File>
 			<File
@@ -2437,6 +2537,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\vidaone.c"
+				>
+			</File>
+			<File
 				RelativePath="..\vitosmt.c"
 				>
 			</File>
@@ -2573,8 +2677,24 @@
 				>
 			</File>
 			<File
+				RelativePath="..\xol.c"
+				>
+			</File>
+			<File
 				RelativePath="..\yahoo.c"
 				>
+			</File>
+			<File
+				RelativePath="..\pocketfms_fp.c">
+			</File>
+			<File
+				RelativePath="..\pocketfmt_bc.c">
+			</File>
+			<File
+				RelativePath="..\naviguide.c">
+			</File>
+			<File
+				RelativePath="..\v900.c">
 			</File>
 			<Filter
 				Name="Jeeps"
@@ -3086,6 +3206,18 @@
 			Filter="h;hpp;hxx;hm;inl"
 			>
 			<File
+				RelativePath="..\avltree.h"
+				>
+			</File>
+			<File
+				RelativePath="..\cet.h"
+				>
+			</File>
+			<File
+				RelativePath="..\cet_util.h"
+				>
+			</File>
+			<File
 				RelativePath=".\config.h"
 				>
 			</File>
@@ -3098,6 +3230,22 @@
 				>
 			</File>
 			<File
+				RelativePath="..\defs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\filterdefs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\garmin_device_xml.h.h"
+				>
+			</File>
+			<File
+				RelativePath="..\garmin_fs.h"
+				>
+			</File>
+			<File
 				RelativePath="..\garmin_gpi.h"
 				>
 			</File>
@@ -3106,7 +3254,19 @@
 				>
 			</File>
 			<File
-				RelativePath="..\jeeps\gpsdevice.h"
+				RelativePath="..\gbfile.h"
+				>
+			</File>
+			<File
+				RelativePath="..\gbser.h"
+				>
+			</File>
+			<File
+				RelativePath="..\gbser_private.h"
+				>
+			</File>
+			<File
+				RelativePath="..\gbtypes.h"
 				>
 			</File>
 			<File
@@ -3114,7 +3274,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\holux.h"
+				RelativePath="..\inifile.h"
 				>
 			</File>
 			<File
@@ -3137,6 +3297,18 @@
 				RelativePath="..\quovadis.h"
 				>
 			</File>
+			<File
+				RelativePath="..\session.h"
+				>
+			</File>
+			<File
+				RelativePath="..\strptime.h"
+				>
+			</File>
+			<File
+				RelativePath="..\uuid.h"
+				>
+			</File>
 			<Filter
 				Name="Jeeps-Headers"
 				>
@@ -3154,6 +3326,10 @@
 				</File>
 				<File
 					RelativePath="..\jeeps\gpsdatum.h"
+					>
+				</File>
+				<File
+					RelativePath="..\jeeps\gpsdevice.h"
 					>
 				</File>
 				<File

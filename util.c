@@ -29,10 +29,16 @@
 #include <stdarg.h>
 #include <time.h>
 
+// First test Apple's clever macro that's really a runtime test so
+// that our universal binaries work right.
+#if defined __BIG_ENDIAN__
+#define i_am_little_endian !__BIG_ENDIAN__
+#else
 #if defined WORDS_BIGENDIAN
 # define i_am_little_endian 0
 #else
 # define i_am_little_endian 1
+#endif
 #endif
 
 #ifdef DEBUG_MEM
@@ -204,8 +210,10 @@ xrealloc(void *p, size_t s)
 {
 	char *o = (char *) realloc(p,s);
 #ifdef DEBUG_MEM
-	debug_mem_output( "realloc, %x, %x, %x, %s, %d\n", 
-			o, p, s, file, line );
+	if (p != NULL)
+		debug_mem_output( "realloc, %x, %x, %x, %s, %d\n", o, p, s, file, line );
+	else
+		debug_mem_output( "malloc, %x, %d, %s, %d\n", o, s, file, line );
 #endif
 
 	if (!o) {
@@ -300,6 +308,19 @@ xfputs(const char *errtxt, const char *s, FILE *stream)
 int
 xasprintf(char **strp, const char *fmt, ...)
 {
+	va_list args;
+	int res;
+	
+	va_start(args, fmt);
+	res = xvasprintf(strp, fmt, args);
+	va_end(args);
+	
+	return res;
+}
+
+int
+xvasprintf(char **strp, const char *fmt, va_list ap)
+{
 /* From http://perfec.to/vsnprintf/pasprintf.c */
 /* size of first buffer malloc; start small to exercise grow routines */
 #ifdef DEBUG_MEM
@@ -331,7 +352,7 @@ xasprintf(char **strp, const char *fmt, ...)
 			return -1;
 		}
 
-		va_start(args, fmt);
+		va_copy(args, ap);
 		outsize = vsnprintf(buf, bufsize, fmt, args);
 		va_end(args);
 		
@@ -382,6 +403,7 @@ xasprintf(char **strp, const char *fmt, ...)
 	*strp = buf;
 	return outsize;
 }
+
 
 /* 
  * Duplicate a pascal string into a normal C string.
@@ -599,7 +621,8 @@ char *
 strenquote(const char *str, const char quot_char)
 {
 	int len;
-	char *cin, *cout;
+	const char *cin;
+	char *cout;
 	char *tmp;
 
 	if (str == NULL) cin = "";
@@ -663,6 +686,13 @@ signed int
 be_read16(const void *p)
 {
 	unsigned char *i = (unsigned char *) p;
+	return i[0] << 8 | i[1];
+}
+
+unsigned int
+be_readu16(const void *p)
+{
+	const unsigned char *i = (unsigned char *) p;
 	return i[0] << 8 | i[1];
 }
 
@@ -897,7 +927,7 @@ get_cache_icon(const waypoint *waypointp)
 	 * For icons, type overwrites container.  So a multi-micro will 
 	 * get the icons for "multi".
  	 */
-	switch (waypointp->gc_data.type) {
+	switch (waypointp->gc_data->type) {
 		case gt_virtual:
 			return "Virtual cache";
 		case gt_multi:
@@ -912,7 +942,7 @@ get_cache_icon(const waypoint *waypointp)
 			break;
 	}
 
-	switch (waypointp->gc_data.container) {
+	switch (waypointp->gc_data->container) {
 		case gc_micro: 
 			return "Micro-Cache";
 			break;
@@ -920,7 +950,7 @@ get_cache_icon(const waypoint *waypointp)
 			break;
 	}
 
-	if (waypointp->gc_data.diff > 1) {
+	if (waypointp->gc_data->diff > 1) {
 		return "Geocache";
 	}
 
@@ -928,11 +958,11 @@ get_cache_icon(const waypoint *waypointp)
 }
 
 double
-endian_read_double(void* ptr, int read_le)
+endian_read_double(const void* ptr, int read_le)
 {
   double ret;
   char r[8];
-  void *p;
+  const void *p;
   int i;
   
   if ( i_am_little_endian == read_le ) {
@@ -945,17 +975,24 @@ endian_read_double(void* ptr, int read_le)
 	  }
 	  p = r;
   }
-  
+
+// Word order is different on arm, but not on arm-eabi.  
+#if defined(__arm__) && !defined(__ARM_EABI__)
+  memcpy(&ret, p + 4, 4);
+  memcpy(((void *)&ret) + 4, p, 4);
+#else
   memcpy(&ret, p, 8);
+#endif
+
   return ret;
 }
 
 float
-endian_read_float(void* ptr, int read_le)
+endian_read_float(const void* ptr, int read_le)
 {
   float ret;
   char r[4];
-  void *p;
+  const void *p;
   int i;
   
   if ( i_am_little_endian == read_le ) {
@@ -976,12 +1013,20 @@ endian_read_float(void* ptr, int read_le)
 void
 endian_write_double(void* ptr, double d, int write_le)
 {
-  char *r = (char *)(void *)&d;
   int i;
   char *optr = ptr;
+// Word order is different on arm, but not on arm-eabi.  
+#if defined(__arm__) && !defined(__ARM_EABI__)
+  char r[8];
+  memcpy( r + 4, &d, 4);
+  memcpy( r, ((void *)&d) + 4, 4);
+#else     
+  char *r = (char *)(void *)&d;
+#endif
+
 
   if ( i_am_little_endian == write_le ) {
-	  memcpy( ptr, &d, 8);
+	  memcpy( ptr, r, 8);
   }
   else {
 	  for (i = 0; i < 8; i++)
@@ -1010,7 +1055,7 @@ endian_write_float(void* ptr, float f, int write_le)
 }
 
 float
-le_read_float( void *ptr ) {return endian_read_float(ptr, 1);}
+le_read_float( const void *ptr ) {return endian_read_float(ptr, 1);}
 
 void
 le_write_float( void *ptr, float f ) {endian_write_float(ptr,f,1);}
@@ -1022,7 +1067,7 @@ void
 be_write_float( void *ptr, float f ) {endian_write_float(ptr,f,0);}
 
 double 
-le_read_double( void *ptr ) {return endian_read_double(ptr,1);}
+le_read_double( const void *ptr ) {return endian_read_double(ptr,1);}
 
 void
 le_write_double( void *ptr, double d ) {endian_write_double(ptr,d,1);}
@@ -1089,14 +1134,30 @@ strsub(const char *s, const char *search, const char *replace)
 char *
 gstrsub(const char *s, const char *search, const char *replace)
 {
-	char *o = xstrdup(s);
+	int ooffs = 0;
+	char *o, *c;
+	char *src = (char *)s;
+	int olen = strlen(src);
+	int slen = strlen(search);
+	int rlen = strlen(replace);
 
-	while (strstr(o, search)) {
-		char *oo = o;
-		o = strsub(o, search, replace);
-		xfree(oo);
+	o = xmalloc(olen + 1);
+	
+	while ((c = strstr(src, search))) {
+		olen += (rlen - slen);
+		o = xrealloc(o, olen + 1);
+		memcpy(o + ooffs, src, c - src);
+		ooffs += (c - src);
+		src = c + slen;
+		if (rlen) {
+			memcpy(o + ooffs, replace, rlen);
+			ooffs += rlen;
+		}
 	}
 
+	if (ooffs < olen)
+		memcpy(o + ooffs, src, olen - ooffs);
+	o[olen] = '\0';
 	return o;
 }
 
@@ -1333,7 +1394,7 @@ convert_human_time_format(const char *human_timef)
  * html = 1 for html output otherwise text
  */
 char *
-pretty_deg_format(double lat, double lon, char fmt, char *sep, int html) 
+pretty_deg_format(double lat, double lon, char fmt, const char *sep, int html) 
 {
 	double  latmin, lonmin, latsec, lonsec;
 	int     latint, lonint;
@@ -1657,7 +1718,7 @@ xml_tag *xml_next( xml_tag *root, xml_tag *cur )
 	return cur;
 }
 
-xml_tag *xml_findnext( xml_tag *root, xml_tag *cur, char *tagname ) 
+xml_tag *xml_findnext( xml_tag *root, xml_tag *cur, const char *tagname ) 
 {
 	xml_tag *result = cur;
 	do {
@@ -1666,12 +1727,12 @@ xml_tag *xml_findnext( xml_tag *root, xml_tag *cur, char *tagname )
 	return result;
 }
 
-xml_tag *xml_findfirst( xml_tag *root, char *tagname )
+xml_tag *xml_findfirst( xml_tag *root, const char *tagname )
 {
 	return xml_findnext( root, root, tagname );
 }
 
-char *xml_attribute( xml_tag *tag, char *attrname ) 
+char *xml_attribute( xml_tag *tag, const char *attrname ) 
 {
 	char *result = NULL;
 	if ( tag->attributes ) {
@@ -1699,4 +1760,52 @@ char *get_filename(const char *fname)
 	else res = (cs > cb) ? cs : cb;
 	
 	return (res == NULL) ? (char *) fname : ++res;
+}
+
+/* bit manipulation functions */
+
+/*
+ * setbit: Set bit number [nr] of buffer [buf]
+ */
+void gb_setbit(void *buf, const gbuint32 nr)
+{
+	unsigned char *bytes = buf;
+	bytes[nr / 8] |= (1 << (nr % 8));
+}
+
+/*
+ * setbit: Get state of bit number [nr] of buffer [buf]
+ */
+char gb_getbit(const void *buf, const gbuint32 nr)
+{
+	const unsigned char *bytes = buf;
+	return (bytes[nr / 8] & (1 << (nr % 8)));
+	
+}
+
+/*
+ * gb_int2ptr: Needed, when sizeof(*void) != sizeof(int) ! compiler warning !
+ */
+void *gb_int2ptr(const int i)
+{
+	union {
+		void *p;
+		int i;
+	} x = { NULL };
+
+	x.i = i;
+	return x.p;
+}
+
+/*
+ * gb_ptr2int: Needed, when sizeof(*void) != sizeof(int) ! compiler warning !
+ */
+int gb_ptr2int(const void *p)
+{
+	union {
+		const void *p;
+		int i;
+	} x = { p };
+
+	return x.i;
 }

@@ -28,6 +28,7 @@
 #include "strptime.h"
 #include "jeeps/gpsmath.h"
 #include "xmlgeneric.h"  // for xml_fill_in_time.
+#include "garmin_fs.h"
 
 #define MYNAME "CSV_UTIL"
 
@@ -56,9 +57,14 @@ typedef enum {
 	XT_ALT_METERS,
 	XT_ANYNAME,
 	XT_CADENCE,
+	XT_CITY,
 	XT_CONSTANT,
+	XT_COUNTRY,
 	XT_DESCRIPTION,
 	XT_EXCEL_TIME,
+	XT_FACILITY,
+	XT_FILENAME,
+	XT_FORMAT,
 	XT_GEOCACHE_CONTAINER,
 	XT_GEOCACHE_DIFF,
 	XT_GEOCACHE_HINT,
@@ -89,6 +95,7 @@ typedef enum {
 	XT_LAT_DIRDECIMAL,
 	XT_LAT_HUMAN_READABLE,
 	XT_LAT_INT32DEG,
+	XT_LAT_DDMMDIR,
 	XT_LAT_NMEA,
 	XT_LOCAL_TIME,
 	XT_LON_DECIMAL,
@@ -97,6 +104,7 @@ typedef enum {
 	XT_LON_DIRDECIMAL,
 	XT_LON_HUMAN_READABLE,
 	XT_LON_INT32DEG,
+	XT_LON_DDMMDIR,
 	XT_LON_NMEA,
 	XT_MAP_EN_BNG,
 	XT_NOTES,
@@ -107,8 +115,12 @@ typedef enum {
 	XT_PATH_SPEED_KNOTS,
 	XT_PATH_SPEED_KPH,
 	XT_PATH_SPEED_MPH,
+	XT_PHONE_NR,
+	XT_POSTAL_CODE,
 	XT_ROUTE_NAME,
 	XT_SHORTNAME,
+	XT_STATE,
+	XT_STREET_ADDR,
 	XT_TIMET_TIME,
 	XT_TRACK_NAME,
 	XT_URL,
@@ -126,13 +138,10 @@ xcsv_file_t xcsv_file;
 extern char *xcsv_urlbase;
 extern char *prefer_shortnames;
 
-extern geocache_type gs_mktype(const char *t);
-extern geocache_container gs_mkcont(const char *t);
-
 static double pathdist = 0;
 static double oldlon = 999;
 static double oldlat = 999;
-    
+
 static int waypt_out_count;
 static route_head *csv_track, *csv_route;
 
@@ -429,6 +438,24 @@ decdir_to_dec(const char * decdir)
     }
     
     return(rval * sign);
+}
+
+/*****************************************************************************/
+/* ddmmdir_to_degrees() - convert ddmm/direction value into degrees          */
+/* usage: lat = ddmmdir_to_degrees("W90.1234");                              */
+/*        lat = ddmmdir_to_degrees("30.1234N");                              */
+/*****************************************************************************/
+static double
+ddmmdir_to_degrees(const char * ddmmdir)
+{
+      // if not N or E, prepend a '-' to ddmm2degrees input
+      // see XT_LAT_NMEA which handles ddmm directly
+      if (strchr(ddmmdir, 'W') || strchr(ddmmdir, 'S'))
+      {
+         return ddmm2degrees(- atof(ddmmdir));
+      }
+      return ddmm2degrees(atof(ddmmdir));
+
 }
 #endif
 
@@ -749,7 +776,11 @@ yyyymmdd_to_time(const char *s)
 	tm.tm_mon = t % 100 - 1;
 	t = t / 100;
 	tm.tm_year = t - 1900;
-	return mktime(&tm);
+	
+	if (mkgmtime(&tm) > 0)
+		return mktime(&tm);
+	else
+		return 0;
 }
 
 
@@ -848,12 +879,15 @@ static
 int 
 writehms(char * buff, size_t bufsize, const char * format, time_t t, int gmt )
 {
-	static struct tm * stmp;
+	static struct tm no_time = {0};
+	static struct tm * stmp = &no_time;
 
 	if (gmt)
 		stmp = gmtime(&t);
 	else
 		stmp = localtime(&t);
+
+	if (stmp == NULL) stmp = &no_time;
 
 	return snprintf(buff, bufsize, format, 
 		stmp->tm_hour, stmp->tm_min, stmp->tm_sec, 
@@ -874,6 +908,17 @@ time_to_yyyymmdd(time_t t)
 	return b;
 }
 
+static garmin_fs_t *
+gmsd_init(waypoint *wpt)
+{
+	garmin_fs_t *gmsd = GMSD_FIND(wpt);
+	if (gmsd == NULL) {
+		gmsd = garmin_fs_alloc(-1);
+		fs_chain_add(&wpt->fs, (format_specific_data *) gmsd);
+	}
+	return gmsd;
+}
+
 /*****************************************************************************/
 /* xcsv_parse_val() - parse incoming data into the waypt structure.          */
 /* usage: xcsv_parse_val("-123.34", *waypt, *field_map)                      */
@@ -882,6 +927,11 @@ static void
 xcsv_parse_val(const char *s, waypoint *wpt, const field_map_t *fmp)
 {
     char *enclosure = "";
+    geocache_data *gc_data = NULL;
+
+    if (!fmp->printfc) {
+      fatal(MYNAME ": xcsv style '%s' is missing format specifier", fmp->key);
+    }
 
     if (0 == strcmp(fmp->printfc, "\"%s\"")) {
 	enclosure = "\"";
@@ -936,6 +986,9 @@ xcsv_parse_val(const char *s, waypoint *wpt, const field_map_t *fmp)
     case XT_LAT_HUMAN_READABLE:
 	human_to_dec( s, &wpt->latitude, &wpt->longitude, 1 );
 	break;
+    case XT_LAT_DDMMDIR:
+         wpt->latitude = ddmmdir_to_degrees(s);
+      break;
     case XT_LAT_NMEA:
 	wpt->latitude = ddmm2degrees(atof(s));
     	break;
@@ -957,6 +1010,9 @@ xcsv_parse_val(const char *s, waypoint *wpt, const field_map_t *fmp)
     case XT_LON_HUMAN_READABLE:
 	human_to_dec( s, &wpt->latitude, &wpt->longitude, 2 );
     	break;
+    case XT_LON_DDMMDIR:
+         wpt->longitude = ddmmdir_to_degrees(s);
+      break;
     case XT_LON_NMEA:
 	wpt->longitude = ddmm2degrees(atof(s));
     	break;
@@ -1036,47 +1092,49 @@ xcsv_parse_val(const char *s, waypoint *wpt, const field_map_t *fmp)
     case XT_ISO_TIME_MS: 
 	wpt->creation_time = xml_parse_time(s, &wpt->microseconds);
     	break;
-	case XT_GEOCACHE_LAST_FOUND:
-	wpt->gc_data.last_found = yyyymmdd_to_time(s);
+    case XT_GEOCACHE_LAST_FOUND:
+        waypt_alloc_gc_data(wpt)->last_found = yyyymmdd_to_time(s);
     	break;
 
     /* GEOCACHING STUFF ***************************************************/
     case XT_GEOCACHE_DIFF:
        /* Geocache Difficulty as an int */
-	wpt->gc_data.diff = atof(s) * 10; 
+        waypt_alloc_gc_data(wpt)->diff = atof(s) * 10; 
     	break;
     case XT_GEOCACHE_TERR:
        /* Geocache Terrain as an int */
-	wpt->gc_data.terr = atof(s) * 10;
+        waypt_alloc_gc_data(wpt)->terr = atof(s) * 10;
     	break;
     case XT_GEOCACHE_TYPE:
        /* Geocache Type */
-	wpt->gc_data.type = gs_mktype(s);
+        waypt_alloc_gc_data(wpt)->type = gs_mktype(s);
     	break;
     case XT_GEOCACHE_CONTAINER:
-	wpt->gc_data.container = gs_mkcont(s);
+        waypt_alloc_gc_data(wpt)->container = gs_mkcont(s);
     	break;
     case XT_GEOCACHE_HINT:
-	wpt->gc_data.hint = csv_stringtrim(s, "", 0);
+        waypt_alloc_gc_data(wpt)->hint = csv_stringtrim(s, "", 0);
     	break;
     case XT_GEOCACHE_PLACER:
-	wpt->gc_data.placer = csv_stringtrim(s, "", 0);
+        waypt_alloc_gc_data(wpt)->placer = csv_stringtrim(s, "", 0);
     	break;
     case XT_GEOCACHE_ISAVAILABLE:
+        gc_data = waypt_alloc_gc_data(wpt);
 	if ( case_ignore_strcmp(csv_stringtrim(s, "", 0), "False") == 0 )
-        	wpt->gc_data.is_available = status_false;
+        	gc_data->is_available = status_false;
 	else if ( case_ignore_strcmp(csv_stringtrim(s, "", 0), "True") == 0 )
-		wpt->gc_data.is_available = status_true;
+		gc_data->is_available = status_true;
 	else
-		wpt->gc_data.is_available = status_unknown;
+		gc_data->is_available = status_unknown;
 	break;
     case XT_GEOCACHE_ISARCHIVED:
+        gc_data = waypt_alloc_gc_data(wpt);
 	if ( case_ignore_strcmp(csv_stringtrim(s, "", 0), "False") == 0 )
-		wpt->gc_data.is_archived = status_false;
+		gc_data->is_archived = status_false;
 	else if ( case_ignore_strcmp(csv_stringtrim(s, "", 0), "True") == 0 )
-		wpt->gc_data.is_archived = status_true;        
+		gc_data->is_archived = status_true;        
 	else
-	wpt->gc_data.is_archived = status_unknown;
+	gc_data->is_archived = status_unknown;
 	break;
 		
     /* GPS STUFF *******************************************************/
@@ -1110,7 +1168,10 @@ xcsv_parse_val(const char *s, waypoint *wpt, const field_map_t *fmp)
 	if (csv_route) csv_route->rte_name = csv_stringtrim(s, enclosure, 0);
     	break;
     case XT_TRACK_NAME:
-	if (csv_track) csv_track->rte_name = csv_stringtrim(s, enclosure, 0);
+	if (!csv_track) {
+		csv_track = route_head_alloc();
+        }
+	csv_track->rte_name = csv_stringtrim(s, enclosure, 0);
     	break;
 	
     /* OTHER STUFF ***************************************************/
@@ -1125,6 +1186,42 @@ xcsv_parse_val(const char *s, waypoint *wpt, const field_map_t *fmp)
     	break;
     case XT_PATH_DISTANCE_KM:
 	/* Ignored on input */
+	break;
+    /* GMSD ****************************************************************/
+    case XT_COUNTRY: {
+	garmin_fs_t *gmsd = gmsd_init(wpt);
+	GMSD_SET(country, csv_stringtrim(s, enclosure, 0));
+	}
+	break;
+    case XT_STATE: {
+	garmin_fs_t *gmsd = gmsd_init(wpt);
+	GMSD_SET(state, csv_stringtrim(s, enclosure, 0));
+	}
+	break;
+    case XT_CITY: {
+	garmin_fs_t *gmsd = gmsd_init(wpt);
+	GMSD_SET(city, csv_stringtrim(s, enclosure, 0));
+	}
+	break;
+    case XT_STREET_ADDR: {
+	garmin_fs_t *gmsd = gmsd_init(wpt);
+	GMSD_SET(addr, csv_stringtrim(s, enclosure, 0));
+	}
+	break;
+    case XT_POSTAL_CODE: {
+	garmin_fs_t *gmsd = gmsd_init(wpt);
+	GMSD_SET(postal_code, csv_stringtrim(s, enclosure, 0));
+	}
+	break;
+    case XT_PHONE_NR: {
+	garmin_fs_t *gmsd = gmsd_init(wpt);
+	GMSD_SET(phone_nr, csv_stringtrim(s, enclosure, 0));
+	}
+	break;
+    case XT_FACILITY: {
+	garmin_fs_t *gmsd = gmsd_init(wpt);
+	GMSD_SET(facility, csv_stringtrim(s, enclosure, 0));
+	}
 	break;
     case -1:
     	if (strncmp(fmp->key, "LON_10E", 7) == 0) {
@@ -1169,6 +1266,8 @@ xcsv_data_read(void)
     }
 
     while ((buff = gbfgetstr(xcsv_file.xcsvfp))) {
+	if ((linecount == 0) && xcsv_file.xcsvfp->unicode) cet_convert_init(CET_CHARSET_UTF8, 1);
+
         linecount++;
 	/* Whack trailing space; leading space may matter if our field sep
 	 * is whitespace and we have leading whitespace. 
@@ -1240,6 +1339,7 @@ xcsv_data_read(void)
 		case trkdata:
 		    if (trk == NULL) {
 			trk = route_head_alloc();
+			csv_track = trk;
 			track_add_head(trk);
 		    }
 		    track_add_wpt(trk, wpt_tmp);
@@ -1247,6 +1347,7 @@ xcsv_data_read(void)
 		case rtedata:
 		    if (rte == NULL) {
 			rte = route_head_alloc();
+			csv_route = rte;
 			route_add_head(rte);
 		    }
 		    route_add_wpt(rte, wpt_tmp);
@@ -1464,6 +1565,10 @@ xcsv_waypt_pr(const waypoint *wpt)
             writebuff(buff, fmp->printfc,
               dec_to_intdeg(lat));
             break;
+        case XT_LAT_DDMMDIR:
+            /*latitude as (degrees * 100) + decimal minutes, with N/S after it */
+            dec_to_human( buff, fmp->printfc, "SN", degrees2ddmm(lat) );
+            break;
 	case XT_LAT_HUMAN_READABLE:
 	    dec_to_human( buff, fmp->printfc, "SN", lat );
 	    break;
@@ -1492,6 +1597,10 @@ xcsv_waypt_pr(const waypoint *wpt)
             /* longitudee as an integer offset from 0 degrees */
             writebuff(buff, fmp->printfc,
               dec_to_intdeg(lon));
+            break;
+        case XT_LON_DDMMDIR:
+            /* longidute as (degrees * 100) + decimal minutes, with W/E after it*/
+            dec_to_human( buff, fmp->printfc, "WE", degrees2ddmm(lon) );
             break;
 	case XT_LON_HUMAN_READABLE:
 	    dec_to_human( buff, fmp->printfc, "WE", lon );
@@ -1606,50 +1715,50 @@ xcsv_waypt_pr(const waypoint *wpt)
 		wpt->microseconds, XML_LONG_TIME);
 	    break;
         case XT_GEOCACHE_LAST_FOUND:
-	    writebuff(buff, fmp->printfc, time_to_yyyymmdd(wpt->gc_data.last_found));
+	    writebuff(buff, fmp->printfc, time_to_yyyymmdd(wpt->gc_data->last_found));
 	    break;
 
         /* GEOCACHE STUFF **************************************************/
         case XT_GEOCACHE_DIFF:
             /* Geocache Difficulty as a double */
-            writebuff(buff, fmp->printfc, wpt->gc_data.diff / 10.0);
-	    field_is_unknown = !wpt->gc_data.diff;
+            writebuff(buff, fmp->printfc, wpt->gc_data->diff / 10.0);
+	    field_is_unknown = !wpt->gc_data->diff;
             break;
         case XT_GEOCACHE_TERR:
             /* Geocache Terrain as a double */
-            writebuff(buff, fmp->printfc, wpt->gc_data.terr / 10.0);
-	    field_is_unknown = !wpt->gc_data.terr;
+            writebuff(buff, fmp->printfc, wpt->gc_data->terr / 10.0);
+	    field_is_unknown = !wpt->gc_data->terr;
             break;
         case XT_GEOCACHE_CONTAINER:
             /* Geocache Container */
-            writebuff(buff, fmp->printfc, gs_get_container(wpt->gc_data.container));
-	    field_is_unknown = wpt->gc_data.container == gc_unknown;
+            writebuff(buff, fmp->printfc, gs_get_container(wpt->gc_data->container));
+	    field_is_unknown = wpt->gc_data->container == gc_unknown;
 	    break;
 	case XT_GEOCACHE_TYPE:
             /* Geocache Type */
-            writebuff(buff, fmp->printfc, gs_get_cachetype(wpt->gc_data.type));
-	    field_is_unknown = wpt->gc_data.type == gt_unknown;
+            writebuff(buff, fmp->printfc, gs_get_cachetype(wpt->gc_data->type));
+	    field_is_unknown = wpt->gc_data->type == gt_unknown;
             break; 
 	case XT_GEOCACHE_HINT:
-	    writebuff(buff, fmp->printfc, NONULL(wpt->gc_data.hint));
-	    field_is_unknown = !wpt->gc_data.hint;
+	    writebuff(buff, fmp->printfc, NONULL(wpt->gc_data->hint));
+	    field_is_unknown = !wpt->gc_data->hint;
             break; 
 	case XT_GEOCACHE_PLACER:
-	    writebuff(buff, fmp->printfc, NONULL(wpt->gc_data.placer));
-	    field_is_unknown = !wpt->gc_data.placer;
+	    writebuff(buff, fmp->printfc, NONULL(wpt->gc_data->placer));
+	    field_is_unknown = !wpt->gc_data->placer;
             break;
 	case XT_GEOCACHE_ISAVAILABLE:
-	    if ( wpt->gc_data.is_available == status_false )
+	    if ( wpt->gc_data->is_available == status_false )
 	      writebuff(buff, fmp->printfc, "False");
-	    else if ( wpt->gc_data.is_available == status_true )
+	    else if ( wpt->gc_data->is_available == status_true )
 	      writebuff(buff, fmp->printfc, "True");
 			else
 				writebuff(buff, fmp->printfc, "Unknown");
             break;
 	case XT_GEOCACHE_ISARCHIVED:
-	    if ( wpt->gc_data.is_archived == status_false )
+	    if ( wpt->gc_data->is_archived == status_false )
 	      writebuff(buff, fmp->printfc, "False");
-	    else if ( wpt->gc_data.is_archived == status_true )
+	    else if ( wpt->gc_data->is_archived == status_true )
 	    	writebuff(buff, fmp->printfc, "True");
 	    else
 		writebuff(buff, fmp->printfc, "Unknown");
@@ -1704,6 +1813,49 @@ xcsv_waypt_pr(const waypoint *wpt)
 		}
 		writebuff(buff, fmp->printfc, fix);
 		}
+		break;
+	/* GMSD ************************************************************/
+	case XT_COUNTRY: {
+		garmin_fs_t *gmsd = GMSD_FIND(wpt);
+		writebuff(buff, fmp->printfc, GMSD_GET(country, ""));
+		}
+		break;
+	case XT_STATE: {
+		garmin_fs_t *gmsd = GMSD_FIND(wpt);
+		writebuff(buff, fmp->printfc, GMSD_GET(state, ""));
+		}
+		break;
+	case XT_CITY: {
+		garmin_fs_t *gmsd = GMSD_FIND(wpt);
+		writebuff(buff, fmp->printfc, GMSD_GET(city, ""));
+		}
+		break;
+	case XT_POSTAL_CODE: {
+		garmin_fs_t *gmsd = GMSD_FIND(wpt);
+		writebuff(buff, fmp->printfc, GMSD_GET(postal_code, ""));
+		}
+		break;
+	case XT_STREET_ADDR: {
+		garmin_fs_t *gmsd = GMSD_FIND(wpt);
+		writebuff(buff, fmp->printfc, GMSD_GET(addr, ""));
+		}
+		break;
+	case XT_PHONE_NR: {
+		garmin_fs_t *gmsd = GMSD_FIND(wpt);
+		writebuff(buff, fmp->printfc, GMSD_GET(phone_nr, ""));
+		}
+		break;
+	case XT_FACILITY: {
+		garmin_fs_t *gmsd = GMSD_FIND(wpt);
+		writebuff(buff, fmp->printfc, GMSD_GET(facility, ""));
+		}
+		break;
+	/* specials */
+	case XT_FILENAME:
+		writebuff(buff, fmp->printfc, wpt->session->filename);
+		break;
+	case XT_FORMAT:
+		writebuff(buff, fmp->printfc, wpt->session->name);
 		break;
 	case -1:
 		if (strncmp(fmp->key, "LON_10E", 7) == 0) {

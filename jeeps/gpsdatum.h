@@ -44,6 +44,8 @@ GPS_OEllipse GPS_Ellipse[]=
     { "WGS66",                   6378145.000, 298.25 },
     { "WGS72",                   6378135.000, 298.26 },
     { "WGS84",                   6378137.000, 298.257223563 },
+	{ "Clarke 1880(Benoit)",     6378300.789,293.4663155389811 },
+
 };
 
 
@@ -183,6 +185,7 @@ GPS_ODatum GPS_Datum[]=
 /* 121 */    { "Sweden",          	4,  	424.3, 	-80.5, 	613.1 	},
 /* 122 */    { "GDA 94",		21,  	0, 	0, 	0 	},
 /* 123 */    { "CH-1903",		4,  	674, 	15, 	405 	},
+/*124 */    { "Palestine 1923",     27, -235, -85, 264},                 
 	     { NULL,                 	0,  	0,    	0,     	0 	}
 };
 
@@ -207,6 +210,7 @@ GPS_ODatum_Alias GPS_DatumAlias[] =
     { "NAD27 Canal Zone", 21 },
     { "NAD27 Caribbean", 25 },
     { "NAD27 Central", 27 },
+    { "NAD27 CONUS", 78 },
     { "NAD27 Cuba", 31 },
     { "NAD27 Greenland", 44 },
     { "NAD27 Mexico", 70 },

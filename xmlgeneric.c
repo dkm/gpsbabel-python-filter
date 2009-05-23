@@ -131,7 +131,7 @@ xml_fill_in_time(char *time_string, const time_t timep, int microseconds, int lo
 }
 
 void
-xml_write_time(gbfile *ofd, const time_t timep, int microseconds, char *elname)
+xml_write_time(gbfile *ofd, const time_t timep, int microseconds, const char *elname)
 {
 	char time_string[64];
 	xml_fill_in_time(time_string, timep, microseconds, XML_LONG_TIME);
@@ -267,11 +267,17 @@ void xml_read(void)
 	char buf[MY_CBUF];
 	
 	while ((len = gbfread(buf, 1, sizeof(buf), ifd))) {
-		if (!XML_Parse(psr, buf, len, gbfeof(ifd))) {
+		char *str = buf;
+		if (ifd->unicode) {
+			str = cet_str_uni_to_utf8((short *)&buf, len >> 1);
+			len = strlen(str);
+		}
+		if (!XML_Parse(psr, str, len, gbfeof(ifd))) {
 			fatal(MYNAME ":Parse error at %d: %s\n",
 				(int) XML_GetCurrentLineNumber(psr),
 				XML_ErrorString(XML_GetErrorCode(psr)));
 		}
+		if (str != buf) xfree(str);
 	}
 	XML_ParserFree(psr);
 	
@@ -304,10 +310,14 @@ void xml_ignore_tags(const char **taglist)
 }
 
 void
-xml_init(const char *fname, xg_tag_mapping *tbl, const char *encoding)
+xml_init0(const char *fname, xg_tag_mapping *tbl, const char *encoding, 
+          gbsize_t offset )
 {
 	if (fname) {
 		ifd = gbfopen(fname, "r", MYNAME);
+		if (offset) {
+			gbfseek(ifd, offset, SEEK_SET);
+		}
 	} else {
 		ifd = NULL;
 	}
@@ -325,9 +335,23 @@ xml_init(const char *fname, xg_tag_mapping *tbl, const char *encoding)
 
 	xg_tag_tbl = tbl;
 
+	cet_convert_init(CET_CHARSET_UTF8, 1);
+
 	XML_SetUnknownEncodingHandler(psr, cet_lib_expat_UnknownEncodingHandler, NULL);
 	XML_SetElementHandler(psr, xml_start, xml_end);
 	XML_SetCharacterDataHandler(psr, xml_cdata);
+}
+
+/* xml_init0 iwth a default seek argument of zero */
+void
+xml_init(const char *fname, xg_tag_mapping *tbl, const char *encoding) {
+  xml_init0(fname, tbl, encoding, 0);
+}
+
+void
+xml_init_offset(const char *fname, xg_tag_mapping *tbl, const char *encoding,
+                gbsize_t offset) {
+  xml_init0(fname, tbl, encoding, offset);
 }
 
 void

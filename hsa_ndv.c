@@ -50,9 +50,6 @@ arglist_t hsa_ndv_args[] = {
 #define MYNAME "HsaNdv"
 #define MY_CBUF 4096
 
-#define TRUE	1
-#define FALSE	0
-
 
 #if ! HAVE_LIBEXPAT
 static void
@@ -86,7 +83,7 @@ hsa_ndv_start(void *data, const XML_Char *xml_el, const XML_Char **attr)
 	}
 	else if (strcmp(el, "Object") == 0)
 	{
-		wpt_tmp = xcalloc(sizeof(*wpt_tmp), 1);
+		wpt_tmp = waypt_new();
 		wpt_tmp->altitude = unknown_alt;
 		in_Object++;
 	}
@@ -404,8 +401,7 @@ static void readVersion4(gbfile* pFile)
 
 		memset(attr, 0, sizeof(attr));
 
-		wpt_tmp = xcalloc(sizeof(*wpt_tmp), 1);
-		wpt_tmp->altitude = unknown_alt;
+		wpt_tmp = waypt_new();
 
 		// read the first record
 		if( !readRecord( pFile, EF_NVER_REC, recData) )

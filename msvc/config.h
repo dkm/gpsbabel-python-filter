@@ -6,19 +6,23 @@
 // Define to zero for the common UTF-8, ASCII and related sets.
 // Define to one for everything we know.
 
-#undef CET_WANTED     
+/* 0 for most-used, 1 for all character sets */
+#define CET_WANTED 1
+
+/* 1 to enable as many formats as possible */
+#define MAXIMAL_ENABLED 1
 
 /* 1 to enable the CSV formats support */
-#undef CSVFMTS_ENABLED 
+#define CSVFMTS_ENABLED 1
 
 /* 1 to enable all the filters. */
-#undef FILTERS_ENABLED 
+#define FILTERS_ENABLED 1
 
 /* 1 to enable Palm PDB support */
-#undef  PDBFMTS_ENABLED 
+#define  PDBFMTS_ENABLED 1
 
 /* 1 to enable shapefile support */
-#undef SHAPELIB_ENABLED
+#define SHAPELIB_ENABLED 1
 
-#define ZLIB_INHIBITED 1
-
+/* 1 to inhibit our use of zlib. */
+#undef ZLIB_INHIBITED

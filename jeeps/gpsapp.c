@@ -2,21 +2,21 @@
 ** @source JEEPS application and data functions
 **
 ** @author Copyright (C) 1999 Alan Bleasby
-** @version 1.0 
+** @version 1.0
 ** @modified Dec 28 1999 Alan Bleasby. First version
 ** @modified Copyright (C) 2004, 2005, 2006 Robert Lipe
 ** @@
-** 
+**
 ** This library is free software; you can redistribute it and/or
 ** modify it under the terms of the GNU Library General Public
 ** License as published by the Free Software Foundation; either
 ** version 2 of the License, or (at your option) any later version.
-** 
+**
 ** This library is distributed in the hope that it will be useful,
 ** but WITHOUT ANY WARRANTY; without even the implied warranty of
 ** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 ** Library General Public License for more details.
-** 
+**
 ** You should have received a copy of the GNU Library General Public
 ** License along with this library; if not, write to the
 ** Free Software Foundation, Inc., 59 Temple Place - Suite 330,
@@ -117,7 +117,7 @@ char	gps_save_string[GPS_ARB_LEN];
  */
 typedef enum { UpperNo = 0, UpperYes = 1 } copycase;
 
-static 
+static
 void copy_char_array(UC **dst, char* src, int count, copycase mustupper)
 {
 	UC *d = *dst;
@@ -125,10 +125,11 @@ void copy_char_array(UC **dst, char* src, int count, copycase mustupper)
 	do {
 		UC sc = *src++;
 		if (sc == 0) {
-			while (count--) 
+			while (count--)
 				*d++ = ' ';
 			break;
 		}
+		if (!isalnum(sc)) continue;
 		else *d++ = mustupper == UpperYes ? toupper(sc) : sc;
 	} while (--count) ;
 	*dst += ocount;
@@ -149,15 +150,15 @@ void copy_char_array(UC **dst, char* src, int count, copycase mustupper)
 int32 GPS_Init(const char *port)
 {
     int32 ret;
-    
-    (void) GPS_Util_Little();    
+
+    (void) GPS_Util_Little();
 
     ret = GPS_A000(port);
     if(ret<0) return ret;
     gps_save_time = GPS_Command_Get_Time(port);
 
     /*
-     * Some units may be unable to return time, such as a C320 when in 
+     * Some units may be unable to return time, such as a C320 when in
      * charging mode.  Only consider it fatal if the unit returns an error,
      * not just absence of returning a time.
      */
@@ -215,7 +216,7 @@ static int32 GPS_A000(const char *port)
     gps_save_id = id;
     gps_save_version = (double)((double)version/(double)100.);
 
-    GPS_User("Unit:\t%s\nID:\t%d\nVersion:\t%.2f", 
+    GPS_User("Unit:\t%s\nID:\t%d\nVersion:\t%.2f",
 	gps_save_string, gps_save_id, gps_save_version);
 
 #if 0
@@ -235,14 +236,14 @@ static int32 GPS_A000(const char *port)
     gps_trk_type           = -1;
     gps_trk_hdr_type       = -1;
     gps_rte_link_type      = -1;
-    
+
     gps_prx_waypt_transfer = -1;
     gps_prx_waypt_type     = -1;
     gps_almanac_transfer   = -1;
     gps_almanac_type       = -1;
     gps_lap_transfer       = -1;
     gps_lap_type           = -1;
-   
+
     if(!GPS_Device_Wait(fd))
     {
 	GPS_Warning("A001 protocol not supported");
@@ -260,7 +261,7 @@ static int32 GPS_A000(const char *port)
 	 * reading until we incur a timeout.
 	 * Worse still, the serial layer assumes a read timeout is a
 	 * fatal error, while the USB layer (correctly) returns that error
-	 * to the caller.  So we call GPS_Device_Wait which spins into 
+	 * to the caller.  So we call GPS_Device_Wait which spins into
 	 * a delay/select for the serial system and a NOP for USB.
 	 *
 	 * Worse _yet_, this is the one place in all of Garmin Protocolsville
@@ -292,7 +293,7 @@ static int32 GPS_A000(const char *port)
 
 	   /*
  	    * If a 296 has previously been interrupted, it's going to
-	    * ignore the session request (grrrr) and continue to send 
+	    * ignore the session request (grrrr) and continue to send
 	    * us left over packets.   So if we see anything that isn't
  	    * part of our A000 discovery  cycle, reset the counter and
 	    * continue to loop.
@@ -310,7 +311,7 @@ carry_on:
     /* Make sure PVT is off as some GPS' have it on by default */
     if(gps_pvt_transfer != -1)
 	GPS_A800_Off(port,&fd);
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -320,7 +321,7 @@ carry_on:
     return 1;
 }
 
-    
+
 
 
 /* @funcstatic  GPS_A001 ************************************************
@@ -340,7 +341,7 @@ static void GPS_A001(GPS_PPacket packet)
     US tag;
     US data;
     US lasta=0;
-    
+
     gps_link_type          = -1;
     gps_device_command     = -1;
     gps_waypt_transfer     = -1;
@@ -356,10 +357,10 @@ static void GPS_A001(GPS_PPacket packet)
     gps_almanac_type       = -1;
     gps_lap_transfer       = -1;
     gps_lap_type           = -1;
-    
+
     entries = packet->n / 3;
     p = packet->data;
-    
+
     for(i=0;i<entries;++i,p+=3)
     {
 	tag = *p;
@@ -396,7 +397,7 @@ static void GPS_A001(GPS_PPacket packet)
 		case 201:
 		    gps_route_transfer = pA201;
 		    break;
-		case 300: 
+		case 300:
 		    gps_trk_transfer = pA300;
 		    break;
 		case 301:
@@ -473,7 +474,7 @@ static void GPS_A001(GPS_PPacket packet)
 				gps_waypt_type = data;
 				break;
 
-			/* 
+			/*
 			 * Observered on Quest 3.0, 27xx, 27x, 29x.
 			 */
 			case 120:
@@ -496,7 +497,7 @@ static void GPS_A001(GPS_PPacket packet)
 			
 		}
 	    }
-	    
+
 
 	    else if(lasta<300)
 	    {
@@ -510,7 +511,7 @@ static void GPS_A001(GPS_PPacket packet)
 		    gps_rte_link_type = data;
 		    continue;
 		}
-		    
+
 		if(data<=110 && data>=100)
 		{
 		    gps_rte_type = data;
@@ -621,7 +622,7 @@ static void GPS_A001(GPS_PPacket packet)
 		if (data == 800)
 		    gps_pvt_type = pD800;
 		/*
-		 *  Stupid, undocumented Vista 3.60 D802 packets 
+		 *  Stupid, undocumented Vista 3.60 D802 packets
 		 else
 		    GPS_Protocol_Error(tag,data);
 	         */
@@ -712,7 +713,7 @@ static void GPS_A001(GPS_PPacket packet)
 	}
     }
 
-    GPS_User("\nLink_type %d  Device_command %d\n", 
+    GPS_User("\nLink_type %d  Device_command %d\n",
 	gps_link_type, gps_device_command);
     GPS_User("Waypoint: Transfer %d Type %d\n",
 	gps_waypt_transfer, gps_waypt_type);
@@ -762,7 +763,7 @@ int32 GPS_A100_Get(const char *port, GPS_PWay **way, int (*cb)(int, GPS_PWay *))
 	GPS_Error("A100_Get: Cannot write packet");
 	return FRAMING_ERROR;
     }
-    
+
     if(!GPS_Get_Ack(fd, &tra, &rec))
     {
 	GPS_Error("A100_Get: No acknowledge");	
@@ -870,7 +871,7 @@ int32 GPS_A100_Get(const char *port, GPS_PWay **way, int (*cb)(int, GPS_PWay *))
 	GPS_Error("A100_GET: Waypoint entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -1046,7 +1047,7 @@ int32 GPS_A101_Get(const char *port)
 	GPS_Error("A101_Get: Cannot write packet");
 	return FRAMING_ERROR;
     }
-    
+
     if(!GPS_Get_Ack(fd, &tra, &rec))
     {
 	GPS_Error("A101_Get: No acknowledge");	
@@ -1104,7 +1105,7 @@ static void GPS_D100_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 100;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1113,11 +1114,11 @@ static void GPS_D100_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
-    
+
     return;
 }
 
@@ -1138,7 +1139,7 @@ static void GPS_D101_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 101;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1147,7 +1148,7 @@ static void GPS_D101_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
@@ -1156,7 +1157,7 @@ static void GPS_D101_Get(GPS_PWay *way, UC *s)
     p+=sizeof(float);
 
     (*way)->smbl = *p;
-    
+
     return;
 }
 
@@ -1177,7 +1178,7 @@ static void GPS_D102_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 102;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1186,7 +1187,7 @@ static void GPS_D102_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
@@ -1196,7 +1197,7 @@ static void GPS_D102_Get(GPS_PWay *way, UC *s)
 
     (*way)->smbl = GPS_Util_Get_Short(p);
 
-    
+
     return;
 }
 
@@ -1217,7 +1218,7 @@ static void GPS_D103_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 103;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1226,14 +1227,14 @@ static void GPS_D103_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
-    
+
     (*way)->smbl = *p++;
     (*way)->dspl = *p;
-    
+
 
     return;
 }
@@ -1255,7 +1256,7 @@ static void GPS_D104_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 104;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1264,11 +1265,11 @@ static void GPS_D104_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
-    
+
     (*way)->dst = GPS_Util_Get_Float(p);
     p+=sizeof(float);
 
@@ -1276,7 +1277,7 @@ static void GPS_D104_Get(GPS_PWay *way, UC *s)
     p+=sizeof(int16);
 
     (*way)->dspl = *p;
-    
+
     return;
 }
 
@@ -1295,9 +1296,9 @@ static void GPS_D105_Get(GPS_PWay *way, UC *s)
 {
     UC *p;
     UC *q;
-    
+
     p=s;
-    
+
     (*way)->prot = 105;
 
     (*way)->lat = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
@@ -1311,7 +1312,7 @@ static void GPS_D105_Get(GPS_PWay *way, UC *s)
 
     q = (UC *) (*way)->wpt_ident;
     while((*q++ = *p++));
-    
+
     return;
 }
 
@@ -1333,7 +1334,7 @@ void GPS_D106_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 106;
 
     (*way)->wpt_class = *p++;
@@ -1345,7 +1346,7 @@ void GPS_D106_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     (*way)->smbl = GPS_Util_Get_Short(p);
     p+=sizeof(int16);
 
@@ -1374,7 +1375,7 @@ static void GPS_D107_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 107;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1383,7 +1384,7 @@ static void GPS_D107_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
@@ -1395,7 +1396,7 @@ static void GPS_D107_Get(GPS_PWay *way, UC *s)
     p+=sizeof(float);
 
     (*way)->colour = *p++;
-    
+
     return;
 }
 
@@ -1414,11 +1415,11 @@ static void GPS_D108_Get(GPS_PWay *way, UC *s)
 {
     UC *p;
     UC *q;
-    
+
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 108;
 
     (*way)->wpt_class = *p++;
@@ -1434,7 +1435,7 @@ static void GPS_D108_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     (*way)->alt = GPS_Util_Get_Float(p);
     p+=sizeof(float);
     (*way)->dpth = GPS_Util_Get_Float(p);
@@ -1447,22 +1448,22 @@ static void GPS_D108_Get(GPS_PWay *way, UC *s)
 
     q = (UC *) (*way)->ident;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->cmnt;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->facility;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->city;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->addr;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->cross_road;
     while((*q++ = *p++));
-    
+
     return;
 }
 
@@ -1482,7 +1483,7 @@ static void GPS_D109_Get(GPS_PWay *way, UC *s, int protoid)
 {
     UC *p;
     UC *q;
-    
+
     int32 i;
 
     p=s;
@@ -1503,7 +1504,7 @@ static void GPS_D109_Get(GPS_PWay *way, UC *s, int protoid)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     (*way)->alt = GPS_Util_Get_Float(p);
     p+=sizeof(float);
     (*way)->dpth = GPS_Util_Get_Float(p);
@@ -1540,22 +1541,22 @@ static void GPS_D109_Get(GPS_PWay *way, UC *s, int protoid)
 
     q = (UC *) (*way)->ident;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->cmnt;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->facility;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->city;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->addr;
     while((*q++ = *p++));
-    
+
     q = (UC *) (*way)->cross_road;
     while((*q++ = *p++));
-    
+
     return;
 }
 
@@ -1575,7 +1576,7 @@ static void GPS_D150_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 150;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
     for(i=0;i<2;++i) (*way)->cc[i] = *p++;
@@ -1586,7 +1587,7 @@ static void GPS_D150_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     (*way)->alt = GPS_Util_Get_Short(p);
     p+=sizeof(int16);
 
@@ -1594,7 +1595,7 @@ static void GPS_D150_Get(GPS_PWay *way, UC *s)
     for(i=0;i<2;++i) (*way)->state[i] = *p++;
     for(i=0;i<30;++i) (*way)->name[i] = *p++;
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
-    
+
     return;
 }
 
@@ -1615,7 +1616,7 @@ static void GPS_D151_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 151;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1624,7 +1625,7 @@ static void GPS_D151_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
@@ -1644,7 +1645,7 @@ static void GPS_D151_Get(GPS_PWay *way, UC *s)
     ++p;
 
     (*way)->wpt_class = *p;
-    
+
     return;
 }
 
@@ -1665,7 +1666,7 @@ static void GPS_D152_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 152;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1674,7 +1675,7 @@ static void GPS_D152_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
@@ -1694,7 +1695,7 @@ static void GPS_D152_Get(GPS_PWay *way, UC *s)
     ++p;
 
     (*way)->wpt_class = *p;
-    
+
     return;
 }
 
@@ -1714,7 +1715,7 @@ static void GPS_D154_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 154;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1723,7 +1724,7 @@ static void GPS_D154_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
@@ -1745,7 +1746,7 @@ static void GPS_D154_Get(GPS_PWay *way, UC *s)
     (*way)->wpt_class = *p++;
 
     (*way)->smbl = GPS_Util_Get_Short(p);
-    
+
     return;
 }
 
@@ -1765,7 +1766,7 @@ static void GPS_D155_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 155;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -1774,7 +1775,7 @@ static void GPS_D155_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
@@ -1797,27 +1798,27 @@ static void GPS_D155_Get(GPS_PWay *way, UC *s)
 
     (*way)->smbl = GPS_Util_Get_Short(p);
     p+=sizeof(int16);
-    
+
     (*way)->dspl = *p;
-    
+
     return;
 }
 
 /*
  * We'll cheat for now.  We know there are no more than 16 categories
  * as of this writing for no data type exposes more than 16 bits in the
- * bitmask of categories.  
+ * bitmask of categories.
  */
 char gps_categories[16][17];
-/* 
+/*
  * Read descriptor s into category number N;
  */
 static
 void GPS_D120_Get(int cat_num, char *s)
 {
-	/* we're guaranteed to have no more than 16 chars plus a 
-	 * null terminator. 
-	 * 
+	/* we're guaranteed to have no more than 16 chars plus a
+	 * null terminator.
+	 *
 	 * If the unit returned no string, the user has not configured one,
 	 * so mimic the behaviour of the 276/296.
 	 */
@@ -1825,7 +1826,7 @@ void GPS_D120_Get(int cat_num, char *s)
 	if (*s) {
 		strncpy(gps_categories[cat_num], s, sizeof (gps_categories[0]));
 	} else {
-		snprintf(gps_categories[cat_num], sizeof (gps_categories[0]), 
+		snprintf(gps_categories[cat_num], sizeof (gps_categories[0]),
 			"Category %d", cat_num+1);
 	}
 }
@@ -1844,7 +1845,7 @@ void GPS_D120_Get(int cat_num, char *s)
 static void GPS_D100_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
@@ -1857,7 +1858,7 @@ static void GPS_D100_Send(UC *data, GPS_PWay way, int32 *len)
     copy_char_array(&p, way->cmnt, 40, UpperYes);
 
     *len = 58;
-    
+
     return;
 }
 
@@ -1875,7 +1876,7 @@ static void GPS_D100_Send(UC *data, GPS_PWay way, int32 *len)
 static void GPS_D101_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
@@ -1894,7 +1895,7 @@ static void GPS_D101_Send(UC *data, GPS_PWay way, int32 *len)
     *p = way->smbl;
 
     *len = 63;
-    
+
     return;
 }
 
@@ -1912,7 +1913,7 @@ static void GPS_D101_Send(UC *data, GPS_PWay way, int32 *len)
 static void GPS_D102_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
@@ -1928,9 +1929,9 @@ static void GPS_D102_Send(UC *data, GPS_PWay way, int32 *len)
     p+= sizeof(float);
 
     GPS_Util_Put_Short(p,(US) way->smbl);
-    
+
     *len = 64;
-    
+
     return;
 }
 
@@ -1948,7 +1949,7 @@ static void GPS_D102_Send(UC *data, GPS_PWay way, int32 *len)
 static void GPS_D103_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
@@ -1963,9 +1964,9 @@ static void GPS_D103_Send(UC *data, GPS_PWay way, int32 *len)
 
     *p++ = (UC) way->smbl;
     *p   = (UC) way->dspl;
-    
+
     *len = 60;
-    
+
     return;
 }
 
@@ -1983,7 +1984,7 @@ static void GPS_D103_Send(UC *data, GPS_PWay way, int32 *len)
 static void GPS_D104_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
@@ -2008,7 +2009,7 @@ static void GPS_D104_Send(UC *data, GPS_PWay way, int32 *len)
     *p = 3; /* display symbol with waypoint name */
 
     *len = 65;
-    
+
     return;
 }
 
@@ -2027,7 +2028,7 @@ static void GPS_D105_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     UC *q;
-    
+
     p = data;
 
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
@@ -2043,7 +2044,7 @@ static void GPS_D105_Send(UC *data, GPS_PWay way, int32 *len)
 
 
     *len = p-data;
-    
+
     return;
 }
 
@@ -2063,9 +2064,9 @@ static void GPS_D106_Send(UC *data, GPS_PWay way, int32 *len)
     UC *p;
     UC *q;
     int32 i;
-    
+
     p = data;
-    
+
     *p++ = way->wpt_class;
     for(i=0;i<13;++i) *p++ = way->subclass[i];
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
@@ -2082,7 +2083,7 @@ static void GPS_D106_Send(UC *data, GPS_PWay way, int32 *len)
     while((*p++ = *q++));
 
     *len = p-data;
-    
+
     return;
 }
 
@@ -2100,7 +2101,7 @@ static void GPS_D106_Send(UC *data, GPS_PWay way, int32 *len)
 static void GPS_D107_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
@@ -2121,7 +2122,7 @@ static void GPS_D107_Send(UC *data, GPS_PWay way, int32 *len)
     *p = way->colour;
 
     *len = 65;
-    
+
     return;
 }
 
@@ -2141,9 +2142,9 @@ static void GPS_D108_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     UC *q;
-    
+
     int32 i;
-    
+
     p = data;
 
     *p++ = way->wpt_class;
@@ -2191,9 +2192,9 @@ static void GPS_D108_Send(UC *data, GPS_PWay way, int32 *len)
     q = (UC *) way->cross_road;
     i = XMIN(51, sizeof(way->cross_road));
     while((*p++ = *q++) && i--);
-    
+
     *len = p-data;
-    
+
     return;
 }
 
@@ -2213,14 +2214,14 @@ static void GPS_D109_Send(UC *data, GPS_PWay way, int32 *len, int protoid)
 {
     UC *p;
     UC *q;
-    
+
     int32 i;
-    
+
     p = data;
 
     *p++ = 1; /* data packet type; must be 1 for D109 and D110 */
     *p++ = 0; // way->wpt_class;
-    
+
     *p++ = ((way->dspl & 3) << 5) | 0x1f;	/* colour & display */
 
     if (protoid == 109) {	/* attr */
@@ -2313,7 +2314,7 @@ static void GPS_D150_Send(UC *data, GPS_PWay way, int32 *len)
 
     if(way->wpt_class == 7) way->wpt_class = 0;
     *p++ = way->wpt_class;
-    
+
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
     p+=sizeof(int32);
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lon));
@@ -2347,11 +2348,11 @@ static void GPS_D151_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     int32 i;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
-    
+
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
     p+=sizeof(int32);
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lon));
@@ -2376,7 +2377,7 @@ static void GPS_D151_Send(UC *data, GPS_PWay way, int32 *len)
     *p   = way->wpt_class;
 
     *len = 124;
-    
+
     return;
 }
 
@@ -2396,11 +2397,11 @@ static void GPS_D152_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     int32 i;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
-    
+
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
     p+=sizeof(int32);
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lon));
@@ -2425,7 +2426,7 @@ static void GPS_D152_Send(UC *data, GPS_PWay way, int32 *len)
     *p   = way->wpt_class;
 
     *len = 124;
-    
+
     return;
 }
 
@@ -2444,11 +2445,11 @@ static void GPS_D154_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     int32 i;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
-    
+
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
     p+=sizeof(int32);
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lon));
@@ -2474,9 +2475,9 @@ static void GPS_D154_Send(UC *data, GPS_PWay way, int32 *len)
     *p++   = way->wpt_class;
 
     GPS_Util_Put_Short(p,(int16)way->smbl);
-    
+
     *len = 126;
-    
+
     return;
 }
 
@@ -2495,11 +2496,11 @@ static void GPS_D154_Send(UC *data, GPS_PWay way, int32 *len)
 static void GPS_D155_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    
+
     p = data;
 
     copy_char_array(&p, way->ident, 6, UpperYes);
-    
+
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
     p+=sizeof(int32);
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lon));
@@ -2527,9 +2528,9 @@ static void GPS_D155_Send(UC *data, GPS_PWay way, int32 *len)
     p+=sizeof(int16);
 
     *p = way->dspl;
-    
+
     *len = 127;
-    
+
     return;
 }
 
@@ -2575,7 +2576,7 @@ int32 GPS_A200_Get(const char *port, GPS_PWay **way)
 	return gps_errno;
 
     n = GPS_Util_Get_Short(rec->data);
-    
+
     if(n)
 	if(!((*way)=(GPS_PWay *)malloc(n*sizeof(GPS_PWay))))
 	{
@@ -2682,7 +2683,7 @@ int32 GPS_A200_Get(const char *port, GPS_PWay **way)
 
     if(!GPS_Packet_Read(fd, &rec))
 	return gps_errno;
-    
+
     if(!GPS_Send_Ack(fd, &tra, &rec))
 	return gps_errno;
 
@@ -2697,7 +2698,7 @@ int32 GPS_A200_Get(const char *port, GPS_PWay **way)
 	GPS_Error("A200_GET: Route entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -2750,7 +2751,7 @@ int32 GPS_A201_Get(const char *port, GPS_PWay **way)
 	return gps_errno;
 
     n = GPS_Util_Get_Short(rec->data);
-    
+
     if(n)
 	if(!((*way)=(GPS_PWay *)malloc(n*sizeof(GPS_PWay))))
 	{
@@ -2875,7 +2876,7 @@ int32 GPS_A201_Get(const char *port, GPS_PWay **way)
 
     if(!GPS_Packet_Read(fd, &rec))
 	return gps_errno;
-    
+
     if(!GPS_Send_Ack(fd, &tra, &rec))
 	return gps_errno;
 
@@ -2890,7 +2891,7 @@ int32 GPS_A201_Get(const char *port, GPS_PWay **way)
 	GPS_Error("A200_GET: Route entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -2946,7 +2947,7 @@ int32 GPS_A200_Send(const char *port, GPS_PWay *way, int32 n)
 	if(way[i]->isrte)
 	{
 	    method = LINK_ID[gps_link_type].Pid_Rte_Hdr;
-	    
+
 	    switch(gps_rte_hdr_type)
 	    {
 	    case pD200:
@@ -3029,7 +3030,7 @@ int32 GPS_A200_Send(const char *port, GPS_PWay *way, int32 n)
 	    return FRAMING_ERROR;
 	}
     }
-    
+
     GPS_Util_Put_Short(data,COMMAND_ID[gps_device_command].Cmnd_Transfer_Wpt);
     GPS_Make_Packet(&tra, LINK_ID[gps_link_type].Pid_Xfer_Cmplt,
 		    data,2);
@@ -3095,7 +3096,7 @@ int32 GPS_A201_Send(const char *port, GPS_PWay *way, int32 n)
 	if(way[i]->isrte)
 	{
 	    method = LINK_ID[gps_link_type].Pid_Rte_Hdr;
-	    
+
 	    switch(gps_rte_hdr_type)
 	    {
 	    case pD200:
@@ -3115,7 +3116,7 @@ int32 GPS_A201_Send(const char *port, GPS_PWay *way, int32 n)
 	else if(way[i]->islink)
 	{
 	    method = LINK_ID[gps_link_type].Pid_Rte_Link_Data;
-	    
+
 	    switch(gps_rte_link_type)
 	    {
 	    case pD210:
@@ -3198,7 +3199,7 @@ int32 GPS_A201_Send(const char *port, GPS_PWay *way, int32 n)
 	    return FRAMING_ERROR;
 	}
     }
-    
+
     GPS_Util_Put_Short(data,COMMAND_ID[gps_device_command].Cmnd_Transfer_Wpt);
     GPS_Make_Packet(&tra, LINK_ID[gps_link_type].Pid_Xfer_Cmplt,
 		    data,2);
@@ -3293,7 +3294,7 @@ static void GPS_D202_Get(GPS_PWay *way, UC *s)
     (*way)->isrte    = 1;
     q = (UC *) (*way)->rte_ident;
     while((*q++=*p++));
-    
+
     return;
 }
 
@@ -3313,7 +3314,7 @@ static void GPS_D210_Get(GPS_PWay *way, UC *s)
     UC *p;
     UC *q;
     int32 i;
-    
+
     p=s;
 
     (*way)->rte_link_class = GPS_Util_Get_Short(p);
@@ -3321,7 +3322,7 @@ static void GPS_D210_Get(GPS_PWay *way, UC *s)
     for(i=0;i<18;++i) (*way)->rte_link_subclass[i] = *p++;
     q = (UC *) (*way)->rte_link_ident;
     while((*q++=*p++));
-    
+
     return;
 }
 
@@ -3342,7 +3343,7 @@ static void GPS_D200_Send(UC *data, GPS_PWay way, int32 *len)
 
     *data = way->rte_num;
     *len = 1;
-    
+
     return;
 }
 
@@ -3361,14 +3362,13 @@ static void GPS_D200_Send(UC *data, GPS_PWay way, int32 *len)
 static void GPS_D201_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
-    int32 i;
-    
+
     p = data;
-    
+
     *p++ = way->rte_num;
-    for(i=0;i<20;++i) *p++ = way->rte_cmnt[i];
+    copy_char_array(&p, way->rte_cmnt, 20, UpperYes);
     *len = 21;
-    
+
     return;
 }
 
@@ -3388,14 +3388,14 @@ static void GPS_D202_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     UC *q;
-    
+
     p = data;
     q = (UC *) way->rte_ident;
-    
+
     while((*p++ = *q++));
 
     *len = p-data;
-    
+
     return;
 }
 
@@ -3416,7 +3416,7 @@ static void GPS_D210_Send(UC *data, GPS_PWay way, int32 *len)
     UC *p;
     UC *q;
     int32 i;
-    
+
     p = data;
 
     GPS_Util_Put_Short(p,(US) way->rte_link_class);
@@ -3427,7 +3427,7 @@ static void GPS_D210_Send(UC *data, GPS_PWay way, int32 *len)
     while((*p++ = *q++));
 
     *len = p-data;
-    
+
     return;
 }
 
@@ -3462,7 +3462,7 @@ int32 GPS_A300_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
 	GPS_Warning("A300 protocol unsupported");
 	return GPS_UNSUPPORTED;
     }
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -3481,7 +3481,7 @@ int32 GPS_A300_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
 	return gps_errno;
     if(!GPS_Send_Ack(fd, &tra, &rec))
 	return gps_errno;
-    
+
 
     n = GPS_Util_Get_Short(rec->data);
 
@@ -3511,7 +3511,7 @@ int32 GPS_A300_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
 	GPS_Error("A300_GET: Track entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -3526,13 +3526,13 @@ int32 GPS_A300_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
  * The unit will not "finalize" a track unless the operator manually
  * does it from the pushbutton panel OR until the device has gone through
  * a 'get runs' cycle.  Garmin's Training Center, of course, does this
- * because it actually uses that data.   Here we just go through the 
+ * because it actually uses that data.   Here we just go through the
  * mechanics of building and sending the requests and then throwing away
  * all the data in order to finalize that.
  *
  * Hopefully, this won't be needed forever.
  */
-int 
+int
 drain_run_cmd(gpsdevh *fd)
 {
     GPS_PPacket tra;
@@ -3594,7 +3594,7 @@ int32 GPS_A301_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
 	GPS_Warning("A301 protocol unsupported");
 	return GPS_UNSUPPORTED;
     }
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -3617,7 +3617,7 @@ int32 GPS_A301_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
 	return gps_errno;
     if(!GPS_Send_Ack(fd, &tra, &rec))
 	return gps_errno;
-    
+
 
     n = GPS_Util_Get_Short(rec->data);
 
@@ -3630,7 +3630,7 @@ int32 GPS_A301_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
     for(i=0;i<n;++i)
 	if(!((*trk)[i]=GPS_Track_New()))
 	    return MEMORY_ERROR;
-    
+
     for(i=0;i<n;++i)
     {
 	if(!GPS_Packet_Read(fd, &rec))
@@ -3702,7 +3702,7 @@ int32 GPS_A301_Get(const char *port, GPS_PTrack **trk, pcb_fn cb)
 	GPS_Error("A301_GET: Track entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -3737,14 +3737,14 @@ int32 GPS_A300_Send(const char *port, GPS_PTrack *trk, int32 n)
 
     if(gps_trk_transfer == -1)
 	return GPS_UNSUPPORTED;
-    
+
     /* Only those GPS' with L001 can send track data */
     if(!LINK_ID[gps_link_type].Pid_Trk_Data)
     {
 	GPS_Warning("A300 protocol unsupported");
 	return GPS_UNSUPPORTED;
     }
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -3787,7 +3787,7 @@ int32 GPS_A300_Send(const char *port, GPS_PTrack *trk, int32 n)
 	    return FRAMING_ERROR;
 	}
     }
-    
+
     GPS_Util_Put_Short(data,COMMAND_ID[gps_device_command].Cmnd_Transfer_Trk);
     GPS_Make_Packet(&tra, LINK_ID[gps_link_type].Pid_Xfer_Cmplt,
 		    data,2);
@@ -3829,17 +3829,22 @@ int32 GPS_A301_Send(const char *port, GPS_PTrack *trk, int32 n)
     int32 i;
     int32 len;
     UC  method;
-    
+
     if(gps_trk_transfer == -1)
 	return GPS_UNSUPPORTED;
-    
+
+    if(gps_trk_transfer == 302) {
+	GPS_Warning("A302: Device does not support sending tracks to it. ");
+	return GPS_UNSUPPORTED;
+    }
+
     /* Only those GPS' with L001 can send track data */
     if(!LINK_ID[gps_link_type].Pid_Trk_Data)
     {
 	GPS_Warning("A301 protocol unsupported");
 	return GPS_UNSUPPORTED;
     }
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -3870,15 +3875,18 @@ int32 GPS_A301_Send(const char *port, GPS_PTrack *trk, int32 n)
 	    case pD312:
 		GPS_D310_Send(data,trk[i],&len);
 		break;
+	    case pD311:
+		GPS_D311_Send(data,trk[i],&len);
+		break;
 	    default:
-		GPS_Error("A301_Send: Unknown track protocol");
+		GPS_Error("A301_Send: Unknown track protocol %d", gps_trk_hdr_type);
 		return PROTOCOL_ERROR;
 	    }
 	}
 	else
 	{
 	    method = LINK_ID[gps_link_type].Pid_Trk_Data;
-	    
+
 	    switch(gps_trk_type)
 	    {
 	    case pD300:
@@ -3886,13 +3894,16 @@ int32 GPS_A301_Send(const char *port, GPS_PTrack *trk, int32 n)
 		len = 13;
 		break;
 	    case pD301:
-	    case pD302:
-		GPS_D301_Send(data,trk[i]);
+		GPS_D301_Send(data,trk[i], 301);
 		len = 21;
+		break;
+	    case pD302:
+		GPS_D301_Send(data,trk[i], 302);
+		len = 25;
 		break;
 	    case pD304:
 		GPS_D304_Send(data,trk[i]);
-		len = 26;
+		len = 23;
 		break;
 	    default:
 		GPS_Error("A301_Send: Unknown track protocol");
@@ -3913,7 +3924,7 @@ int32 GPS_A301_Send(const char *port, GPS_PTrack *trk, int32 n)
 	}
     }
 	
-    
+
     GPS_Util_Put_Short(data,COMMAND_ID[gps_device_command].Cmnd_Transfer_Trk);
     GPS_Make_Packet(&tra, LINK_ID[gps_link_type].Pid_Xfer_Cmplt,
 		    data,2);
@@ -3951,7 +3962,7 @@ int32 GPS_D300_Get(GPS_PTrack *trk, int32 entries, gpsdevh *fd)
     GPS_PPacket tra;
     GPS_PPacket rec;
     int32 i;
-    
+
     if(!(tra = GPS_Packet_New()) || !(rec = GPS_Packet_New()))
 	return MEMORY_ERROR;
 
@@ -3965,13 +3976,13 @@ int32 GPS_D300_Get(GPS_PTrack *trk, int32 entries, gpsdevh *fd)
 	
 	GPS_A300_Translate(rec->data, &trk[i]);
     }
-    
+
 
     if(!GPS_Packet_Read(fd, &rec))
 	return gps_errno;
     if(!GPS_Send_Ack(fd, &tra, &rec))
 	return gps_errno;
-    
+
 
     if(rec->type != LINK_ID[gps_link_type].Pid_Xfer_Cmplt)
     {
@@ -4018,9 +4029,9 @@ void GPS_D301b_Get(GPS_PTrack *trk, UC *data)
 {
     UC *p;
     uint32 t;
-    
+
     p=data;
-    
+
     (*trk)->lat = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
 
@@ -4059,9 +4070,9 @@ void GPS_D302b_Get(GPS_PTrack *trk, UC *data)
     UC *p;
     uint32 t;
     double gps_temp;
-    
+
     p=data;
-    
+
     (*trk)->lat = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
 
@@ -4114,11 +4125,11 @@ void GPS_D303b_Get(GPS_PTrack *trk, UC *data)
     uint32 raw_lat, raw_lon;
     int lat_undefined, lon_undefined;
     p=data;
-    
-    /* Latitude and longitude are sometimes invalid (0x7fffffff or 
-     * maybe 0xffffffff?) I guess this makes sense if the device is 
-     * reporting heart rate and time anyway.  I presume that latitude 
-     * and longitude are defined or left undefined together? 
+
+    /* Latitude and longitude are sometimes invalid (0x7fffffff or
+     * maybe 0xffffffff?) I guess this makes sense if the device is
+     * reporting heart rate and time anyway.  I presume that latitude
+     * and longitude are defined or left undefined together?
      */
     raw_lat = GPS_Util_Get_Int(p);
     lat_undefined = !raw_lat || raw_lat==0x7fffffff || raw_lat==0xffffffff;
@@ -4144,7 +4155,7 @@ void GPS_D303b_Get(GPS_PTrack *trk, UC *data)
 	(*trk)->no_latlon = 1;
     }
 
-    if (lat_undefined != lon_undefined) 
+    if (lat_undefined != lon_undefined)
 	GPS_Warning("GPS_D303b_Get: assumption (lat_undefined == lon_undefined) violated");
 
     t = GPS_Util_Get_Uint(p);
@@ -4155,15 +4166,15 @@ void GPS_D303b_Get(GPS_PTrack *trk, UC *data)
 	(*trk)->Time = GPS_Math_Gtime_To_Utime((time_t)t);
     p+=sizeof(uint32);
 
-    /* When latitude and longitude are undefined, this field seems to be 
+    /* When latitude and longitude are undefined, this field seems to be
      * a constant on my receiver (51 59 04 69) */
     (*trk)->alt = GPS_Util_Get_Float(p);
     if (lat_undefined || lon_undefined) (*trk)->alt = 0.0f;
     p+=sizeof(float);
 
-    /* Heartrate is reported as 0 if there is no signal from 
-     * a heartrate monitor.  
-     *  305 and 304 are identical until now. 
+    /* Heartrate is reported as 0 if there is no signal from
+     * a heartrate monitor.
+     *  305 and 304 are identical until now.
      */
     switch (gps_trk_type) {
     case pD304:
@@ -4185,9 +4196,9 @@ void GPS_D303b_Get(GPS_PTrack *trk, UC *data)
 	break;
     }
 	
-    /* There doesn't seem to be a trk_seg bool, or at least I've not 
-     * observed it yet.  One possibility is to start a new segment 
-     * each time latitude and longitude are undefined? (Ie data from 
+    /* There doesn't seem to be a trk_seg bool, or at least I've not
+     * observed it yet.  One possibility is to start a new segment
+     * each time latitude and longitude are undefined? (Ie data from
      * the heartrate monitor but none from the GPS. */
     (*trk)->tnew = 0;	
 
@@ -4208,7 +4219,7 @@ void GPS_D310_Get(GPS_PTrack *trk, UC *s)
 {
     UC *p;
     UC *q;
-    
+
     p=s;
 
     (*trk)->dspl = *p++;
@@ -4234,7 +4245,7 @@ void GPS_D311_Get(GPS_PTrack *trk, UC *s)
 {
     UC *p;
     short identifier;
-    
+
     p=s;
 
     /* Forerunner */
@@ -4276,21 +4287,26 @@ void GPS_D300_Send(UC *data, GPS_PTrack trk)
 **
 ** @return [void]
 ************************************************************************/
-void GPS_D301_Send(UC *data, GPS_PTrack trk)
+void GPS_D301_Send(UC *data, GPS_PTrack trk, int type)
 {
     UC *p;
 
     p = data;
     GPS_A300_Encode(p,trk);
     p = data+12;
-    
+
     GPS_Util_Put_Float(p,trk->alt);
     p+=sizeof(float);
     GPS_Util_Put_Float(p,trk->dpth);
     p+=sizeof(float);
 
+    if (type == 302) {
+      GPS_Util_Put_Float(p,1.0e25);
+      p+=sizeof(float);
+    }
+
     *p = trk->tnew;
-    
+
     return;
 }
 
@@ -4301,10 +4317,10 @@ void GPS_D304_Send(UC *data, GPS_PTrack trk)
     p = data;
     GPS_A300_Encode(p,trk);
     p = data+12;
-    
+
     GPS_Util_Put_Float(p,trk->alt);
     p+=sizeof(float);
- 
+
     GPS_Util_Put_Float(p, (const float) 1.0e25);
     p+=sizeof(float);
 
@@ -4319,12 +4335,33 @@ void GPS_D304_Send(UC *data, GPS_PTrack trk)
     *p = trk->cadence > 0 ? trk->cadence : 0xff;
     p+=sizeof(char);
 
-    *p = trk->tnew;
-
     return;
 }
 
+/* @func GPS_D311_Send **************************************************
+**
+** Form track header data string
+**
+** @param [w] data [UC *] string to write to
+** @param [r] trk [GPS_PTrack] track data
+** @param [w] len [int32 *] length of data
+**
+** @return [void]
+************************************************************************/
+void GPS_D311_Send(UC *data, GPS_PTrack trk, int32 *len)
+{
+    UC *p;
+    int identifier;
 
+    p = data;
+//    sscanf(trk->trk_ident, "%d", &identifier);
+    identifier = 0x1234;
+    GPS_Util_Put_Short(p,identifier);
+    p += 2;
+    *len = p-data;
+
+    return;
+}
 
 /* @func GPS_D310_Send **************************************************
 **
@@ -4340,17 +4377,17 @@ void GPS_D310_Send(UC *data, GPS_PTrack trk, int32 *len)
 {
     UC *p;
     UC *q;
-    
+
     p = data;
 
     *p++ = trk->dspl;
     *p++ = trk->colour;
-    
+
     q = (UC *) trk->trk_ident;
     while((*p++ = *q++));
-    
+
     *len = p-data;
-    
+
     return;
 }
 
@@ -4368,9 +4405,9 @@ static void GPS_A300_Translate(UC *s, GPS_PTrack *trk)
 {
     UC *p;
     uint32 t;
-    
+
     p=s;
-    
+
     (*trk)->lat = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
 
@@ -4411,7 +4448,7 @@ static void GPS_A300_Encode(UC *s, GPS_PTrack trk)
 
     GPS_Util_Put_Int(p,GPS_Math_Deg_To_Semi(trk->lon));
     p+=sizeof(int32);
-    
+
     GPS_Util_Put_Uint(p,GPS_Math_Utime_To_Gtime(trk->Time));
     p+=sizeof(uint32);
 
@@ -4474,7 +4511,7 @@ int32 GPS_A400_Get(const char *port, GPS_PWay **way)
 
     if(!GPS_Packet_Read(fd, &rec))
 	return gps_errno;
-    
+
     if(!GPS_Send_Ack(fd, &tra, &rec))
 	return gps_errno;
 
@@ -4571,8 +4608,8 @@ int32 GPS_A400_Get(const char *port, GPS_PWay **way)
 	GPS_Error("A400_GET: Prx waypoint entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
-    
+
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -4602,7 +4639,7 @@ int32 GPS_A400_Send(const char *port, GPS_PWay *way, int32 n)
     GPS_PPacket rec;
     int32 i;
     int32 len;
-    
+
     if(gps_prx_waypt_transfer == -1)
 	return GPS_UNSUPPORTED;
 
@@ -4688,7 +4725,7 @@ int32 GPS_A400_Send(const char *port, GPS_PWay *way, int32 n)
 	    return FRAMING_ERROR;
 	}
     }
-    
+
     GPS_Util_Put_Short(data,COMMAND_ID[gps_device_command].Cmnd_Transfer_Prx);
     GPS_Make_Packet(&tra, LINK_ID[gps_link_type].Pid_Xfer_Cmplt,
 		    data,2);
@@ -4726,7 +4763,7 @@ static void GPS_D400_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 400;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -4735,14 +4772,14 @@ static void GPS_D400_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
 
     (*way)->dst=GPS_Util_Get_Float(p);
-    
-    
+
+
     return;
 }
 
@@ -4762,7 +4799,7 @@ static void GPS_D403_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 403;
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
 
@@ -4771,11 +4808,11 @@ static void GPS_D403_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     p+=sizeof(int32);
 
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
-    
+
     (*way)->smbl = *p++;
     (*way)->dspl = *p++;
 
@@ -4800,12 +4837,12 @@ static void GPS_D450_Get(GPS_PWay *way, UC *s)
     int32 i;
 
     p=s;
-    
+
     (*way)->prot = 450;
 
     (*way)->idx = GPS_Util_Get_Short(p);
     p+=sizeof(int16);
-    
+
     for(i=0;i<6;++i) (*way)->ident[i] = *p++;
     for(i=0;i<2;++i) (*way)->cc[i] = *p++;
     (*way)->wpt_class = *p++;
@@ -4815,7 +4852,7 @@ static void GPS_D450_Get(GPS_PWay *way, UC *s)
 
     (*way)->lon = GPS_Math_Semi_To_Deg(GPS_Util_Get_Int(p));
     p+=sizeof(int32);
-    
+
     (*way)->alt = GPS_Util_Get_Short(p);
     p+=sizeof(int16);
 
@@ -4825,7 +4862,7 @@ static void GPS_D450_Get(GPS_PWay *way, UC *s)
     for(i=0;i<40;++i) (*way)->cmnt[i] = *p++;
 
     (*way)->dst=GPS_Util_Get_Float(p);
-    
+
     return;
 }
 
@@ -4844,7 +4881,7 @@ static void GPS_D400_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     int32 i;
-    
+
     p = data;
 
     for(i=0;i<6;++i) *p++ = way->ident[i];
@@ -4859,7 +4896,7 @@ static void GPS_D400_Send(UC *data, GPS_PWay way, int32 *len)
     GPS_Util_Put_Float(p,way->dst);
 
     *len = 62;
-    
+
     return;
 }
 
@@ -4878,7 +4915,7 @@ static void GPS_D403_Send(UC *data, GPS_PWay way, int32 *len)
 {
     UC *p;
     int32 i;
-    
+
     p = data;
 
     for(i=0;i<6;++i) *p++ = way->ident[i];
@@ -4894,9 +4931,9 @@ static void GPS_D403_Send(UC *data, GPS_PWay way, int32 *len)
     *p   = way->dspl;
 
     GPS_Util_Put_Float(p,way->dst);
-    
+
     *len = 64;
-    
+
     return;
 }
 
@@ -4924,7 +4961,7 @@ static void GPS_D450_Send(UC *data, GPS_PWay way, int32 *len)
     for(i=0;i<6;++i) *p++ = way->ident[i];
     for(i=0;i<2;++i) *p++ = way->cc[i];
     *p++ = way->wpt_class;
-    
+
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lat));
     p+=sizeof(int32);
     GPS_Util_Put_Int(p,(int32)GPS_Math_Deg_To_Semi(way->lon));
@@ -4939,7 +4976,7 @@ static void GPS_D450_Send(UC *data, GPS_PWay way, int32 *len)
     for(i=0;i<40;++i) *p++ = way->cmnt[i];
 
     GPS_Util_Put_Float(p,way->dst);
-    
+
 
     *len = 121;
 
@@ -4967,7 +5004,7 @@ int32 GPS_A500_Get(const char *port, GPS_PAlmanac **alm)
 
     if (gps_almanac_transfer == -1)
 	return GPS_UNSUPPORTED;
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -5002,7 +5039,7 @@ int32 GPS_A500_Get(const char *port, GPS_PAlmanac **alm)
 		if(!GPS_Packet_Read(fd, &recpkt)) {
 			return gps_errno;
 		}
-    
+
 		if(!GPS_Send_Ack(fd, &trapkt, &recpkt)) {
 			return gps_errno;
 		}
@@ -5040,12 +5077,12 @@ int32 GPS_A500_Get(const char *port, GPS_PAlmanac **alm)
 	GPS_Error("A500_Get: Error transferring almanac");
 	return FRAMING_ERROR;
     }
-    
+
     if(i != n) {
 	GPS_Error("A500_GET: Almanac entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
+
     GPS_Packet_Del(&trapkt);
     GPS_Packet_Del(&recpkt);
 
@@ -5077,7 +5114,7 @@ int32 GPS_A500_Send(const char *port, GPS_PAlmanac *alm, int32 n)
     int32 timesent;
     int32 posnsent;
     int32 ret;
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -5148,7 +5185,7 @@ int32 GPS_A500_Send(const char *port, GPS_PAlmanac *alm, int32 n)
 	    return FRAMING_ERROR;
 	}
     }
-    
+
     GPS_Util_Put_Short(data,COMMAND_ID[gps_device_command].Cmnd_Transfer_Alm);
     GPS_Make_Packet(&tra, LINK_ID[gps_link_type].Pid_Xfer_Cmplt,
 		    data,2);
@@ -5217,7 +5254,7 @@ int32 GPS_A500_Send(const char *port, GPS_PAlmanac *alm, int32 n)
 	ret = GPS_Rqst_Send_Time(fd,gps_save_time);
 	if(ret < 0) return ret;
     }
-    
+
 
     if(!posnsent)
     {
@@ -5255,34 +5292,34 @@ static void GPS_A500_Translate(UC *s, GPS_PAlmanac *alm)
 
     (*alm)->toa = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->af0 = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->af1 = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->e = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->sqrta = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->m0 = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->w = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->omg0 = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->odot = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*alm)->i = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     return;
 }
 
@@ -5369,7 +5406,7 @@ static void GPS_D551_Send(UC *data, GPS_PAlmanac alm)
     *p = alm->svid;
     GPS_A500_Encode(p+1,alm);
     p[43] = alm->hlth;
-    
+
     return;
 }
 
@@ -5392,7 +5429,7 @@ static void GPS_A500_Encode(UC *s, GPS_PAlmanac alm)
 
     GPS_Util_Put_Short(p,alm->wn);
     p+=sizeof(int16);
-    
+
     GPS_Util_Put_Float(p,alm->toa);
     p+=sizeof(float);
 
@@ -5441,7 +5478,7 @@ time_t GPS_A600_Get(const char *port)
     GPS_PPacket tra;
     GPS_PPacket rec;
     time_t ret;
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -5471,7 +5508,7 @@ time_t GPS_A600_Get(const char *port)
 	GPS_Error("A600_Get: Unknown data/time protocol");
 	return PROTOCOL_ERROR;
     }
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -5501,7 +5538,7 @@ int32 GPS_A600_Send(const char *port, time_t Time)
     GPS_PPacket rec;
     int32 posnsent=0;
     int32 ret=0;
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -5581,7 +5618,7 @@ time_t GPS_D600_Get(GPS_PPacket packet)
 {
     UC *p;
     static struct tm ts;
-    
+
     p = packet->data;
 
     ts.tm_mon  = *p++ - 1;
@@ -5625,7 +5662,7 @@ void GPS_D600_Send(GPS_PPacket *packet, time_t Time)
 
     *p++ = ts->tm_min;
     *p   = ts->tm_sec;
-    
+
     GPS_Make_Packet(packet, LINK_ID[gps_link_type].Pid_Date_Time_Data,
 		    data,8);
 
@@ -5651,7 +5688,7 @@ int32 GPS_A700_Get(const char *port, double *lat, double *lon)
     gpsdevh *fd;
     GPS_PPacket tra;
     GPS_PPacket rec;
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -5682,7 +5719,7 @@ int32 GPS_A700_Get(const char *port, double *lat, double *lon)
 	GPS_Error("A700_Get: Unknown position protocol");
 	return PROTOCOL_ERROR;
     }
-    
+
     GPS_Packet_Del(&tra);
     GPS_Packet_Del(&rec);
 
@@ -5709,7 +5746,7 @@ int32 GPS_A700_Send(const char *port, double lat, double lon)
     gpsdevh *fd;
     GPS_PPacket tra;
     GPS_PPacket rec;
-    
+
     if(!GPS_Device_On(port, &fd))
 	return gps_errno;
 
@@ -5758,7 +5795,7 @@ void GPS_D700_Get(GPS_PPacket packet, double *lat, double *lon)
 {
     UC *p;
     double t;
-    
+
     p = packet->data;
 
     t    = GPS_Util_Get_Double(p);
@@ -5768,7 +5805,7 @@ void GPS_D700_Get(GPS_PPacket packet, double *lat, double *lon)
 
     t    = GPS_Util_Get_Double(p);
     *lon = GPS_Math_Rad_To_Deg(t);
-    
+
 
     return;
 }
@@ -5791,13 +5828,13 @@ void GPS_D700_Send(GPS_PPacket *packet, double lat, double lon)
 
     lat = GPS_Math_Deg_To_Rad(lat);
     lon = GPS_Math_Deg_To_Rad(lon);
-    
+
     p = data;
 
     GPS_Util_Put_Double(p,lat);
     p+=sizeof(double);
     GPS_Util_Put_Double(p,lon);
-    
+
     GPS_Make_Packet(packet, LINK_ID[gps_link_type].Pid_Position_Data,
 		    data,16);
 
@@ -5820,7 +5857,7 @@ int32 GPS_A800_On(const char *port, gpsdevh **fd)
     static UC data[2];
     GPS_PPacket tra;
     GPS_PPacket rec;
-    
+
     if(!GPS_Device_On(port, fd))
 	return gps_errno;
 
@@ -5862,7 +5899,7 @@ int32 GPS_A800_Off(const char *port, gpsdevh **fd)
     static UC data[2];
     GPS_PPacket tra;
     GPS_PPacket rec;
-    
+
     if(!(tra = GPS_Packet_New()) || !(rec = GPS_Packet_New()))
 	return MEMORY_ERROR;
 
@@ -5878,7 +5915,7 @@ int32 GPS_A800_Off(const char *port, gpsdevh **fd)
 	GPS_Error("A800_Off: Not acknowledged");
 	return FRAMING_ERROR;
     }
-    
+
 
     GPS_Packet_Del(&rec);
     GPS_Packet_Del(&tra);
@@ -5906,14 +5943,14 @@ int32 GPS_A800_Get(gpsdevh **fd, GPS_PPvt_Data *packet)
 
     if(!(tra = GPS_Packet_New()) || !(rec = GPS_Packet_New()))
 	return MEMORY_ERROR;
-    
-    
+
+
     if(!GPS_Packet_Read(*fd, &rec)) {
 	GPS_Packet_Del(&rec);
 	GPS_Packet_Del(&tra);
 	return gps_errno;
     }
-    
+
     if(!GPS_Send_Ack(*fd, &tra, &rec)) {
 	GPS_Packet_Del(&rec);
 	GPS_Packet_Del(&tra);
@@ -5925,7 +5962,7 @@ int32 GPS_A800_Get(gpsdevh **fd, GPS_PPvt_Data *packet)
 	GPS_Packet_Del(&tra);
 	return 0;
     }
-    
+
     switch(gps_pvt_type)
     {
     case pD800:
@@ -5958,7 +5995,7 @@ int32 GPS_A800_Get(gpsdevh **fd, GPS_PPvt_Data *packet)
 void GPS_D800_Get(GPS_PPacket packet, GPS_PPvt_Data *pvt)
 {
     UC *p;
-    
+
     p = packet->data;
 
     (*pvt)->alt = GPS_Util_Get_Float(p);
@@ -5972,7 +6009,7 @@ void GPS_D800_Get(GPS_PPacket packet, GPS_PPvt_Data *pvt)
 
     (*pvt)->epv = GPS_Util_Get_Float(p);
     p+=sizeof(float);
-    
+
     (*pvt)->fix = GPS_Util_Get_Short(p);
     p+=sizeof(int16);
 
@@ -5984,7 +6021,7 @@ void GPS_D800_Get(GPS_PPacket packet, GPS_PPvt_Data *pvt)
 
     (*pvt)->lon = GPS_Math_Rad_To_Deg(GPS_Util_Get_Double(p));
     p+=sizeof(double);
-    
+
     (*pvt)->east = GPS_Util_Get_Float(p);
     p+=sizeof(float);
 
@@ -6001,7 +6038,7 @@ void GPS_D800_Get(GPS_PPacket packet, GPS_PPvt_Data *pvt)
     p+=sizeof(int16);
 
     (*pvt)->wn_days = GPS_Util_Get_Int(p);
-    
+
     return;
 }
 
@@ -6094,7 +6131,7 @@ int32 GPS_A906_Get(const char *port, GPS_PLap **lap, pcb_fn cb)
 	GPS_Error("A906_GET: Lap entry number mismatch");
 	return FRAMING_ERROR;
     }
-    
+
     GPS_Packet_Del(&trapkt);
     GPS_Packet_Del(&recpkt);
 
@@ -6115,7 +6152,7 @@ int32 GPS_A906_Get(const char *port, GPS_PLap **lap, pcb_fn cb)
 void GPS_D1011b_Get(GPS_PLap *Lap, UC *p)
 {
     uint32 t;
-    
+
 	/* Lap index (not in D906) */
 	switch(gps_lap_type) {
 		case pD906:
@@ -6204,7 +6241,7 @@ void GPS_D1011b_Get(GPS_PLap *Lap, UC *p)
 }
 
 
-/* 
+/*
  *  It's unfortunate that these aren't constant and therefore switchable,
  *  but they really are runtime variable.  Sigh.
  */
@@ -6315,7 +6352,7 @@ Get_Pkt_Type(unsigned char p, unsigned short d0, const char **xinfo)
 	if (p == LT.Pid_Trk2_Hdr)
 		return "TRKHD2";
 		
-	if (p == GUSB_REQUEST_BULK) 
+	if (p == GUSB_REQUEST_BULK)
 		return "REQBLK";
 	if (p == GUSB_SESSION_START)
 		return "SESREQ";
