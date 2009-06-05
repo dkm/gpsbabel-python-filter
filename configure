@@ -3105,6 +3105,7 @@ $as_echo "no" >&6; }
 fi
 
 
+# AC_EXEEXT is "" on *nix, and AC_SUBST doesn't seem to like empty var...
 #AC_SUBST(AC_EXEEXT)
 
 ac_ext=c
