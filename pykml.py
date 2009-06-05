@@ -223,8 +223,7 @@ class Track:
             if prev.acc == None:
                 ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s" %(prev.creat, prev.vspeed, prev.speed)
             else:
-                ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s\nacc[x]: %.4d\nacc[y]: %.4d\nacc[z]: %.4d" %(prev.creat, prev.vspeed, prev.speed, prev.acc[0],prev.acc[1],prev.acc[2])
-        
+                ET.SubElement(pm, "description").text = "Date: %s\nVert. speed: %.4s m/s\nHoriz. speed: %.4s m/s\nacc[x]: %4f\nacc[y]: %4f\nacc[z]: %4f" %(prev.creat, prev.vspeed, prev.speed, prev.acc[0],prev.acc[1],prev.acc[2])
 #             style = ET.SubElement(pm, "Style")
 #             ET.SubElement(style, "color").text = "FF001EFF"
 #             ET.SubElement(style, "width").text = "5"
