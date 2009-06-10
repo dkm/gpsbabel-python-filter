@@ -696,9 +696,12 @@ pvt_read(posn_status *posn_status)
 {
 	waypoint *wpt = waypt_new();
 	GPS_PPvt_Data pvt = GPS_Pvt_New();
-        int32 i;
 
         while (!GPS_Command_Pvt_Get(&pvt_fd, &pvt)){
+          printf("** FAILING TO READ POSITION... Looping!\n");
+          // maybe we received ^C when looping here...
+          if (posn_status->request_terminate == 1)
+            return NULL;
           sleep(1);
         }
 
