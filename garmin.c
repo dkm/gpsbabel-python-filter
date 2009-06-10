@@ -21,6 +21,8 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <unistd.h>
+
 #include "defs.h"
 #include "grtcirc.h"
 #include "jeeps/gps.h"
@@ -694,8 +696,13 @@ pvt_read(posn_status *posn_status)
 {
 	waypoint *wpt = waypt_new();
 	GPS_PPvt_Data pvt = GPS_Pvt_New();
+        int32 i;
 
-	if (GPS_Command_Pvt_Get(&pvt_fd, &pvt)) {
+        while (!GPS_Command_Pvt_Get(&pvt_fd, &pvt)){
+          sleep(1);
+        }
+
+	if (1) {
 		pvt2wpt(pvt, wpt);
 		GPS_Pvt_Del(&pvt);
 
