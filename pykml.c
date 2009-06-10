@@ -172,7 +172,7 @@ pykml_track_hdr(const route_head *header)
 static void
 pykml_add_point_in_py(const waypoint *waypointp)
 {
-  PyObject *pArgs, *pClass, *pValue, *pMethod;
+  PyObject *pArgs, *pValue, *pMethod;
   int ret = 0;
 
   pMethod = PyObject_GetAttrString(pTrack, PYTHON_TRACK_ADD_WPT);
@@ -228,7 +228,6 @@ pykml_add_point_in_py(const waypoint *waypointp)
 
   Py_DECREF(pArgs);
   Py_DECREF(pValue);
-  Py_DECREF(pClass);
 }
 
 /*
