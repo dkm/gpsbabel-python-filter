@@ -64,7 +64,7 @@ ALL_FMTS=$(MINIMAL_FMTS) gtm.o gpsutil.o pcx.o cetus.o copilot.o \
 	navilink.o mtk_logger.o ik3d.o osm.o destinator.o exif.o vidaone.o \
 	igo8.o gopal.o humminbird.o mapasia.o gnav_trl.o navitel.o ggv_ovl.o \
 	jtr.o sbp.o sbn.o mmo.o skyforce.o itracku.o v900.o \
-	pocketfms_bc.o pocketfms_fp.o naviguide.o pykml.o
+	pocketfms_bc.o pocketfms_fp.o naviguide.o pykml.o tracktest.o
 
 FMTS=@FMTS@
 
@@ -1048,5 +1048,9 @@ zlib/uncompr.o: zlib/uncompr.c zlib/zlib.h zlib/zconf.h
 zlib/zutil.o: zlib/zutil.c zlib/zutil.h zlib/zlib.h zlib/zconf.h
 pykml.o: pykml.c defs.h config.h queue.h gbtypes.h zlib/zlib.h \
   zlib/zconf.h gbfile.h cet.h cet_util.h inifile.h
+tracktest.o: tracktest.c defs.h config.h queue.h gbtypes.h zlib/zlib.h \
+  zlib/zconf.h gbfile.h cet.h cet_util.h inifile.h session.h
+
+
 internal_styles.c: mkstyle.sh @srcdir@/style/*.style
 	@srcdir@/mkstyle.sh > internal_styles.c || (rm -f internal_styles.c ; exit 1)
