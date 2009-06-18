@@ -193,8 +193,8 @@ class Track:
         color.text = "7f0000ff"
         width.text = "5"
 
-    def getKML(self):
-        print "getKML!!"
+    def getResult(self):
+        print "getResult!!"
         sio = cStringIO.StringIO()
 
         sio.write('<?xml version="1.0" encoding="UTF-8"?>\n')

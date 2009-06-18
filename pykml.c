@@ -28,14 +28,14 @@
 
 #define MYNAME "pykml"
 
-#define PYERROR fatal("Error with python interaction at " __FILE__ ": %d", __LINE__)
+#define PYERROR fatal("Error with python interaction at " __FILE__ ": %d\n", __LINE__)
 
 /*
  * Python bindings.
  */
 
 #define PYTHON_TRACK_CLASS "Track"
-#define PYTHON_TRACK_WRITE_METHOD "getKML"
+#define PYTHON_TRACK_WRITE_METHOD "getResult"
 #define PYTHON_TRACK_SET_DATA "setComputedTrackData"
 #define PYTHON_TRACK_ADD_WPT "addPoint"
 
