@@ -23,7 +23,9 @@ from igc2kmz import track
 from igc2kmz.coord import Coord
 from igc2kmz import Flight, flights2kmz
 
-import pickle
+##import pickle
+import traceback
+import StringIO
 
 from datetime import datetime
 
@@ -32,11 +34,20 @@ class Track:
         self.coords = []
 
     def getResult(self):
-        t = track.Track(self.coords)
+        kwargs = {}
+        kwargs['filename'] = "FAKE NAME"
+
+        t = track.Track(self.coords, **kwargs)
  
         f = Flight(t)
-##         print f
-        kmz = flights2kmz([f], roots=[], tz_offset=0, task=None)
+        
+        try:
+            kmz = flights2kmz([f], roots=[], tz_offset=0, task=None)
+            sio = StringIO.StringIO()
+
+            kmz.write("TEMP-TEST", '2.2')
+        except Exception,e:
+            traceback.print_exc()
 
         return ""
     
@@ -50,7 +61,7 @@ class Track:
 
     def addPoint(self, lat, long, 
                  alt, creat, speed, vspeed):
-        print "appending ", lat, long, alt, datetime.fromtimestamp(creat)
+##        print "appending ", lat, long, alt, datetime.fromtimestamp(creat)
 
         self.coords.append(Coord(lat, long, alt, datetime.fromtimestamp(creat)))
-        print "coords: ", len(self.coords)
+##        print "coords: ", len(self.coords)
