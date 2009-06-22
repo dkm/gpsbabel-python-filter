@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+DEB_CONFIGURE_NORMAL_ARGS = --build=$(DEB_BUILD_GNU_TYPE) \
+                            --prefix=$(DEB_CONFIGURE_PREFIX) \
+                            --includedir=$(DEB_CONFIGURE_INCLUDEDIR) \
+                            --mandir=$(DEB_CONFIGURE_MANDIR) \
+                            --infodir=$(DEB_CONFIGURE_INFODIR) \
+                            --sysconfdir=$(DEB_CONFIGURE_SYSCONFDIR) \
+                            --localstatedir=$(DEB_CONFIGURE_LOCALSTATEDIR) \
+                            --libexecdir=$(DEB_CONFIGURE_LIBEXECDIR)
+#                            --disable-maintainer-mode \
+#                            --disable-dependency-tracking
+
+# Add here any variable or target overrides you need.
+COMMON_CONFIGURE_FLAGS :=--with-zlib=system --with-doc=debian/doctmp \
+                --prefix=/usr

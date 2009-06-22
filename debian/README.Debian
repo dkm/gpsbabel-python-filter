@@ -1,0 +1,20 @@
+If you are having trouble with your Garmin USB device, the garmin_usb
+kernel module may have grabbed it.
+
+According to http://www.gpsbabel.org/os/Linux_Hotplug.html, you can
+prevent that by following these instructions:
+
+According to the documentation at gpsbabel:
+http://www.gpsbabel.org/os/Linux_Hotplug.html
+
+To keep the OS from loading the (frequently dysfunctional) kernel
+garmin_gps module, edit /etc/modprobe.d/blacklist and add the lines 
+
+# stop garmin_gps serial from loading for USB garmin devices
+blacklist garmin_gps
+
+To allow the USB devices to be read and written by a non-privileged
+user, create a named /etc/udev/rules.d/51-garmin.rules with the following
+contents:
+
+SYSFS{idVendor}=="091e", SYSFS{idProduct}=="0003", MODE="666" 
