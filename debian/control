@@ -2,9 +2,9 @@ Source: gpsbabel
 Section: unknown
 Priority: extra
 Maintainer: dkm <dkm@gre.kataplop.net>
-Build-Depends: cdbs, debhelper (>= 7), autotools-dev
+Build-Depends: cdbs, debhelper (>= 7), autotools-dev, python-dev (>=2.5)
 Standards-Version: 3.8.1
-Homepage: <insert the upstream URL, if relevant>
+Homepage: http://github.com/dkm/gpsbabel-python-filter/
 
 Package: gpsbabel
 Architecture: any
