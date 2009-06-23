@@ -133,7 +133,7 @@ pykml_track_hdr(const route_head *header)
   pMethod = PyObject_GetAttrString(pTrack, PYTHON_TRACK_SET_DATA);
 
   if (pMethod == NULL){
-    fatal("Could not get method '" PYTHON_TRACK_SET_DATA "' on class '"
+    fatal("Could not get method '" PYTHON_TRACK_SET_DATA "' on class '\n"
           PYTHON_TRACK_CLASS "'");
   }
 
@@ -179,7 +179,7 @@ pykml_add_point_in_py(const waypoint *waypointp)
 
   if (pMethod == NULL){
     fatal ("Could not find method '" PYTHON_TRACK_ADD_WPT "' in class '"
-           PYTHON_TRACK_CLASS "'");
+           PYTHON_TRACK_CLASS "'\n");
   }
 
   pArgs = PyTuple_New(6);
@@ -269,7 +269,7 @@ pykml_wr_init(const char *fname)
   pClass = PyObject_GetAttrString(pModule, PYTHON_TRACK_CLASS);
 
   if (pClass == NULL){
-    fatal("Could not find class '" PYTHON_TRACK_CLASS "' in module %s",
+    fatal("Could not find class '" PYTHON_TRACK_CLASS "' in module %s\n",
           opt_pymodule );
   }
 
@@ -329,7 +329,7 @@ pykml_get_and_write_kml(void){
   
   if (pMethod == NULL){
     fatal("Could not find method '" PYTHON_TRACK_WRITE_METHOD "' in class '"
-          PYTHON_TRACK_CLASS "'");
+          PYTHON_TRACK_CLASS "'\n");
   }
 
   retStr = PyObject_CallObject(pMethod, NULL);
@@ -339,7 +339,7 @@ pykml_get_and_write_kml(void){
 
   if(retStr == NULL){
     fatal("Error when calling '" PYTHON_TRACK_WRITE_METHOD "' method on '"
-          PYTHON_TRACK_CLASS "' class");
+          PYTHON_TRACK_CLASS "' class\n");
   }
 
   str = PyString_AsString(retStr);
@@ -394,7 +394,7 @@ pykml_dummy_trkdata(void){
 
   if (pMethod == NULL){
     fatal ("Could not get method '" PYTHON_TRACK_SET_DATA "' on class '"
-           PYTHON_TRACK_CLASS "'");
+           PYTHON_TRACK_CLASS "'\n");
   }
 
   pArgs = PyTuple_New(12);
