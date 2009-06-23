@@ -1,7 +1,7 @@
 Source: gpsbabel
-Section: unknown
+Section: utils
 Priority: extra
-Maintainer: dkm <dkm@gre.kataplop.net>
+Maintainer: Marc Poulhiès <dkm@kataplop.net>
 Build-Depends: cdbs, debhelper (>= 7), autotools-dev, python-dev (>=2.5)
 Standards-Version: 3.8.1
 Homepage: http://github.com/dkm/gpsbabel-python-filter/
