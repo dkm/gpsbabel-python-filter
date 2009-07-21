@@ -46,10 +46,11 @@ INSTALL_DIR=$(DESTDIR)/$(PREFIX)
 # OTHER_ROOT=/sw		# Uncomment For Fink on OS X.
 
 MINIMAL_FMTS=magproto.o gpx.o geo.o mapsend.o mapsource.o garmin.o \
-	garmin_device_xml.o garmin_tables.o internal_styles.o nmea.o kml.o
+	garmin_device_xml.o garmin_tables.o internal_styles.o nmea.o kml.o \
+	wbt-200.o
 
 ALL_FMTS=$(MINIMAL_FMTS) gtm.o gpsutil.o pcx.o cetus.o copilot.o \
-	gpspilot.o magnav.o \
+	gpspilot.o magnav.o skytraq.o \
 	psp.o holux.o tmpro.o tpg.o tpo.o \
 	xcsv.o gcdb.o tiger.o easygps.o quovadis.o \
 	gpilots.o saroute.o navicache.o psitrex.o geoniche.o delgpl.o \
@@ -59,12 +60,13 @@ ALL_FMTS=$(MINIMAL_FMTS) gtm.o gpsutil.o pcx.o cetus.o copilot.o \
 	tef_xml.o maggeo.o pathaway.o vitosmt.o gdb.o bcr.o coto.o \
 	ignrando.o stmwpp.o msroute.o cst.o nmn4.o mag_pdb.o compegps.o \
 	yahoo.o unicsv.o wfff_xml.o garmin_txt.o axim_gpb.o gpssim.o \
-	wbt-200.o stmsdf.o gtrnctr.o dmtlog.o raymarine.o alan.o vitovtt.o \
+	stmsdf.o gtrnctr.o dmtlog.o raymarine.o alan.o vitovtt.o \
 	ggv_log.o g7towin.o garmin_gpi.o lmx.o random.o xol.o dg-100.o \
 	navilink.o mtk_logger.o ik3d.o osm.o destinator.o exif.o vidaone.o \
 	igo8.o gopal.o humminbird.o mapasia.o gnav_trl.o navitel.o ggv_ovl.o \
-	jtr.o sbp.o sbn.o mmo.o skyforce.o itracku.o v900.o \
-	pocketfms_bc.o pocketfms_fp.o naviguide.o pykml.o tracktest.o
+	jtr.o sbp.o sbn.o mmo.o skyforce.o itracku.o v900.o delbin.o \
+	pocketfms_bc.o pocketfms_fp.o pocketfms_wp.o naviguide.o enigma.o vpl.o \
+	pykml.o
 
 FMTS=@FMTS@
 
@@ -341,6 +343,19 @@ mac-release:
 	cp README* COPYING usr/share/gpsbabel/doc
 	tar cvzf gpsbabel-osx.tgz usr/bin/gpsbabel
 	curl -u anonymous:anonymous --upload-file gpsbabel-osx.tgz ftp://upload.sf.net/incoming/
+
+
+mac-gui: gpsbabel
+	cd gui ; qmake && xcodebuild
+	cp gpsbabel gui/objects/gpsbabelfe-bin.app/Contents/MacOS
+	cp -r gui/help  gui/objects/gpsbabelfe-bin.app/Contents/MacOS
+	cp gui/gmapbase.html gui/objects/gpsbabelfe-bin.app/Contents/MacOS
+
+# Build the Qt front end, place GPSBabel in the right place, deploy all 
+# the libs.
+mac-gui-dmg: mac-gui
+	rm -f gui/objects/gpsbabelfe-bin.dmg
+	cd gui/objects ; macdeployqt gpsbabelfe-bin.app -dmg
 
 msvc-build:
 	make CC=@CL.EXE DEBUGGING="" EXTRA_CFLAGS="-nologo -W3 -WL -D__WIN32__ -I msvc/expat " OUTPUT_SWITCH="-Fo" $(OBJS)
@@ -765,6 +780,8 @@ skyforce.o: skyforce.c defs.h config.h queue.h gbtypes.h zlib/zlib.h \
   zlib/zconf.h gbfile.h cet.h cet_util.h inifile.h session.h strptime.h
 pocketfms_bc.o: pocketfms_bc.c defs.h gbtypes.h 
 pocketfms_fp.o: pocketfms_fp.c defs.h gbtypes.h 
+pocketfms_wp.o: pocketfms_wp.c defs.h gbtypes.h 
+enigma.o: enigma.c defs.h gbtypes.h
 smplrout.o: smplrout.c defs.h config.h queue.h gbtypes.h zlib/zlib.h \
   zlib/zconf.h gbfile.h cet.h cet_util.h inifile.h session.h filterdefs.h \
   grtcirc.h

@@ -3,17 +3,17 @@
 
 AC_PREREQ(2.59)
 
-AC_INIT(GPSBabel, 1.3.6, BUG-REPORT-ADDRESS)
+AC_INIT(GPSBabel, 1.3.7, BUG-REPORT-ADDRESS)
 # Increase GBBUILD for a new release
 GBBUILD=20
 # YYYYMMDD, please, if beta, i.e. "-beta20060413"
-# PACKAGE_RELEASE="-beta20081006"
+PACKAGE_RELEASE="-beta20090708"
 AC_DEFINE_UNQUOTED(PACKAGE_RELEASE, "$PACKAGE_RELEASE", [Define to the release name of this package.])
 AC_SUBST(PACKAGE_RELEASE)
 
 DOCVERSION=`echo $PACKAGE_VERSION`
 DOCVERSION=development
-DOCVERSION=1.3.6
+#DOCVERSION=1.3.6
 AC_SUBST(DOCVERSION)
 
 GBMAJOR=`echo $PACKAGE_VERSION | (IFS="."; read major minor micro; echo $major)`
@@ -157,7 +157,7 @@ case "$target" in
 		OSJEEPS=jeeps/gpsusbstub.o
 	else
 		OSJEEPS=jeeps/gpsusbwin.o
-		USB_LIBS=-lsetupapi
+		USB_LIBS="-lsetupapi -lhid"
 	fi
 	;;
     *-*-darwin*)
@@ -206,6 +206,31 @@ AC_SUBST(USB_CFLAGS)
 AC_SUBST(OSJEEPS)
 AC_SUBST(GBSER)
 AC_SUBST(ZLIB)
+
+dnl Linux HID support
+case "$target" in
+	*-linux-*)
+	AC_MSG_CHECKING(for Linux HID interface)
+	AC_COMPILE_IFELSE([
+		#include <sys/ioctl.h>
+		#include <linux/types.h>
+		#include <linux/hiddev.h>
+		#include <linux/hidraw.h>
+		void f(void) {
+			struct hidraw_devinfo info;
+			struct hiddev_field_info finfo;
+			struct hiddev_usage_ref_multi urefm;
+			struct hiddev_report_info rinfo;
+			ioctl(0, HIDIOCGRAWINFO, &info);
+			ioctl(0, HIDIOCGFIELDINFO, &finfo);
+			ioctl(0, HIDIOCSUSAGES, &urefm);
+			ioctl(0, HIDIOCSREPORT, &rinfo);
+		}],
+		AC_MSG_RESULT(yes)
+		AC_DEFINE(HAVE_LINUX_HID, 1),
+		AC_MSG_RESULT(no))
+	;;
+esac
 
 AC_MSG_CHECKING(for random stuff to make you feel better)
 AC_MSG_RESULT(failed)

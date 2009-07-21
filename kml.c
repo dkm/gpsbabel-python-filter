@@ -407,13 +407,27 @@ kml_write_xmle(const char *tag, const char *v)
 static void kml_write_bitmap_style_(const char *style, const char * bitmap,
 				    int highlighted, int force_heading)
 {
+        int is_track = !strncmp(style, "track", 5);
+        
 	kml_write_xml(0, "<!-- %s %s style -->\n",
 		highlighted ? "Highlighted" : "Normal", style);
 	kml_write_xml(1, "<Style id=\"%s_%c\">\n", style, hovertag(highlighted));
+
+
+	if (is_track && !highlighted) {
+		kml_write_xml(1, "<LabelStyle>\n");
+		kml_write_xml(0, "<scale>0</scale>\n");
+		kml_write_xml(-1, "</LabelStyle>\n");
+	}
+
 	kml_write_xml(1, "<IconStyle>\n");
 	if (highlighted) {
 		kml_write_xml(0, "<scale>1.2</scale>\n");
-	}
+	} else {
+          if (is_track) {
+		kml_write_xml(0, "<scale>.5</scale>\n");
+          }
+        }
 	/* Our icons are pre-rotated, so nail them to the maps. */
 	if (force_heading) {
 		kml_write_xml(0, "<heading>0</heading>\n");
@@ -658,8 +672,7 @@ static void kml_recompute_time_bounds(const waypoint *waypointp) {
   }
 }
 
-static void kml_output_point(const waypoint *waypointp, kml_point_type pt_type)
-{
+static void kml_output_point(const waypoint *waypointp, kml_point_type pt_type) {
   const char *style;
   // Save off this point for later use
   point3d *pt = &point3d_list[point3d_list_len];
@@ -1080,6 +1093,8 @@ static void kml_route_tlr(const route_head *header)
 // the bounding box of our entire data set and set the event times
 // to include all our data.
 void kml_write_AbstractView(void) {
+  double bb_size;
+
   kml_write_xml(1, "<LookAt>\n");
 
   if (kml_time_min || kml_time_max) {
@@ -1115,7 +1130,7 @@ void kml_write_AbstractView(void) {
 
   // It turns out the length of the diagonal of the bounding box gives us a
   // reasonable guess for setting the camera altitude.
-  double bb_size = gcgeodist(kml_bounds.min_lat, kml_bounds.min_lon,
+  bb_size = gcgeodist(kml_bounds.min_lat, kml_bounds.min_lon,
                              kml_bounds.max_lat, kml_bounds.max_lon);
   // Clamp bottom zoom level.  Otherwise, a single point zooms to grass.
   if (bb_size < 1000) {
