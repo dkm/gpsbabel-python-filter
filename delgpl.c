@@ -1,7 +1,7 @@
 /*
     DeLorme GPL Track Format.
 
-    Copyright (C) 2003 Robert Lipe, robertlipe@usa.net
+    Copyright (C) 2003, 2009 Robert Lipe, robertlipe@gpsbabel.org
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -71,11 +71,23 @@ gpl_read(void)
 		if (wpt_tmp->altitude <= unknown_alt + 1)
 			wpt_tmp->altitude = unknown_alt;
 		wpt_tmp->creation_time = le_read32(&gp.tm);
+
+		switch (le_read32(&gp.status)) {
+			case 1: wpt_tmp->fix = fix_none; break;
+			case 2: wpt_tmp->fix = fix_2d; break;
+			case 3: wpt_tmp->fix = fix_3d; break;
+			case 5: wpt_tmp->fix = fix_dgps; break;
+		}
 		
 	        WAYPT_SET(wpt_tmp, course, le_read_double(&gp.heading));
 		WAYPT_SET(wpt_tmp, speed, le_read_double(&gp.speed));
 	        WAYPT_SET(wpt_tmp, speed, MILES_TO_METERS(wpt_tmp->speed)/3600);	
-		
+		// 2008 and 2009 seem to throw track points in that go back
+		// in time.  The only thing I see "special" about those 
+		// trackpoints is that these fields are zeroed.  Toss them.
+		if ((wpt_tmp->speed == 0.0) && (wpt_tmp->course == 0.0)) {
+			continue;
+		}
 		track_add_wpt(track_head, wpt_tmp);
 	}
 }
@@ -107,6 +119,14 @@ gpl_trackpt(const waypoint *wpt)
 	gpl_point_t gp;
 	double speed = 3600*METERS_TO_MILES(wpt->speed);
 	double heading = wpt->course;
+
+	switch(wpt->fix) {
+		case fix_none: status = 1; break;
+		case fix_2d: status = 2; break;
+		case fix_3d: status = 3; break;
+		case fix_dgps: status = 5; break;
+		default: status = 3;   // a strategic lie for fix_unknown.
+	}
 	
 	memset(&gp, 0, sizeof(gp));
 	le_write32(&gp.status, status);

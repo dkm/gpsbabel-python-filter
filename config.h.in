@@ -21,6 +21,9 @@
 /* Defined if you have libusb */
 #undef HAVE_LIBUSB
 
+/* Defined if you have Linux HID interface */
+#undef HAVE_LINUX_HID
+
 /* Define to 1 if you have the `z' library (-lz). */
 #undef HAVE_LIBZ
 
@@ -32,6 +35,9 @@
 
 /* Define to 1 if you have the `sleep' function. */
 #undef HAVE_SLEEP
+
+/* Define to 1 if you have the `uname' function. */
+#undef HAVE_UNAME
 
 /* Define if we have va_copy */
 #undef HAVE_VA_COPY

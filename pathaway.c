@@ -447,6 +447,7 @@ int ppdb_read_wpt(route_head *head, int isRoute)
 			case 6:		/* icon */
 			    if (*str != '\0')
 				wpt_tmp->icon_descr = xstrdup(str); 
+	    			wpt_tmp->wpt_flags.icon_descr_is_dynamic = 1;
 			    break;
 			case 7:		/* notes */
 			    if (*str != '\0')
@@ -638,7 +639,7 @@ static void ppdb_write_wpt(const waypoint *wpt)
 	if (fabs(wpt->altitude) < 9999.0)	
 	{
 	    tmp = str_pool_get(32);
-	    snprintf(tmp, 32, ppdb_fmt_float(METERS_TO_FEET(wpt->altitude)));
+	    snprintf(tmp, 32, "%s", ppdb_fmt_float(METERS_TO_FEET(wpt->altitude)));
 	    buff = ppdb_strcat(buff, tmp, NULL, &len);
 	}
 	buff = ppdb_strcat(buff, ",", NULL, &len);

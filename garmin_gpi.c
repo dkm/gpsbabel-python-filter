@@ -176,7 +176,7 @@ typedef struct {
 } gpi_waypt_t;
 
 static gbfile *fin, *fout;
-static gbint32 codepage;	/* code-page, i.e. 1252 */
+static gbint16 codepage;	/* code-page, i.e. 1252 */
 static reader_data_t *rdata;
 static writer_data_t *wdata;
 static short_handle short_h;
@@ -290,8 +290,16 @@ read_header(void)
 	len = gbfgetint16(fin);
 	gbfseek(fin, len, SEEK_CUR);	/* "my.gpi" */
 
-	(void) gbfgetint32(fin);	/* 1 */
+	i =  gbfgetint32(fin);	/* 1 */
 	(void) gbfgetint32(fin);	/* 12 */
+        /* There are two dwords next.  On most typical files, they're 
+	 * "1" and "12".  On files from garminoneline.de/extras/poi, the
+	 * next two words are "15" and "5" and there's 17 additional bytes 
+ 	 * that I can't identify.   So hardcode a seek here for now.
+	 */
+	if (i == 15) {
+		gbfseek(fin, 17, SEEK_CUR);	
+	}
 
 	gbfread(&rdata->POI, 1, sizeof(rdata->POI) - 1, fin);
 	if (strcmp(rdata->POI, "POI") != 0)
@@ -300,7 +308,9 @@ read_header(void)
 	for (i = 0; i < 3; i++) (void)gbfgetc(fin);
 	gbfread(&rdata->S8, 1, sizeof(rdata->S8) - 1, fin);
 
-	codepage = gbfgetint32(fin);
+	codepage = gbfgetint16(fin);
+	(void) gbfgetint16(fin);   	/* typically 0, but  0x11 in 
+  					Garminonline.de files.  */
 
 #ifdef GPI_DBG
 	PP;
@@ -428,7 +438,12 @@ read_poi_group(const int sz, const int tag)
 #endif
 }
 
-
+// TODO: 'tag' is probably not a 32 bit value.
+// most likely it's a pair of 16's: the first pair is the tag number.
+// if the second 16 is "eight", then it's an
+// extended thingy and it has a 4-byte extended record length (total number 
+// of bytes for all record fields and all nested records, starting after the 
+// length field)
 /* gpi tag handler */
 static int
 read_tag(const char *caller, const int tag, waypoint *wpt)
@@ -518,6 +533,7 @@ read_tag(const char *caller, const int tag, waypoint *wpt)
 			
 		case 0x8000b:	/* address (street/city...) */
 			(void) gbfgetint32(fin);
+		case 0xb:	/* as seen in German POI files. */
 			PP;
 			mask = gbfgetint16(fin); /* address fields mask */
 #ifdef GPI_DBG
@@ -545,6 +561,29 @@ read_tag(const char *caller, const int tag, waypoint *wpt)
 			}
 			break;
 
+		case 0xc:
+			mask = gbfgetint16(fin); 
+			if ((mask & 1) && (str = gpi_read_string("Phone"))) {
+				gmsd = gpi_gmsd_init(wpt);
+				GMSD_SET(phone_nr, str);
+			}
+			if ((mask & 2) && (str = gpi_read_string("Phone2"))) {
+				gmsd = gpi_gmsd_init(wpt);
+				GMSD_SET(phone_nr2, str);
+			}
+			if ((mask & 4) && (str = gpi_read_string("Fax"))) {
+				gmsd = gpi_gmsd_init(wpt);
+				GMSD_SET(fax_nr, str);
+			}
+			if ((mask & 8) && (str = gpi_read_string("Email"))) {
+				gmsd = gpi_gmsd_init(wpt);
+				GMSD_SET(email, str);
+			}
+			if ((mask & 0x10) && (str = gpi_read_string("Link"))) {
+				waypt_add_url(wpt, xstrdup(str), xstrdup(str));
+			}
+			break;
+
 		case 0x8000c:	/* phone-number */
 			(void) gbfgetint32(fin);
 			PP;
@@ -562,6 +601,25 @@ read_tag(const char *caller, const int tag, waypoint *wpt)
 		case 0x80012:	/* ? sounds / images ? */
 			break;
 
+		case 0x11:
+		case 0x80007: 
+		/* Looks like some kind of calendar information. */
+#ifdef GPI_DBG
+			{
+			int x;
+			unsigned char *b = xmalloc(sz);
+			fprintf(stderr, "Tag: %x\n", tag);
+			gbfread(b, 1, sz, fin);
+			fprintf(stderr, "\n");
+			for (x = 0; x < sz; x++)
+			  fprintf(stderr, "%02x ", b[x]);
+			fprintf(stderr, "\n");
+			for (x = 0; x < sz; x++)
+			  fprintf(stderr, "%c", isalnum(b[x]) ? b[x] : '.');
+		        fprintf(stderr, "\n");
+			}
+#endif // GPI_DBG
+			break;
 		default:
 			warning(MYNAME ": Unknown tag (0x%x). Please report!\n", tag);
 			return 0;
@@ -997,7 +1055,8 @@ write_header(void)
 	gbfputc(0, fout);
 	gbfputc(0, fout);
 	gbfwrite("00", 1, 2, fout);
-	gbfputint32(codepage, fout);
+	gbfputint16(codepage, fout);
+	gbfputint16(0, fout);
 }
 
 

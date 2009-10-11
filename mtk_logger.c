@@ -56,6 +56,7 @@
 #include "gbser.h"
 #include "gbfile.h" /* used for csv output */
 #include <ctype.h>
+#include <errno.h>
 
 #define MYNAME "mtk_logger"
 
@@ -112,6 +113,7 @@ static const char *MTK_ACK[] = { /* Flags returned from PMTK001 ack packet */
 #define MTK_EVT_DISTANCE (1<<0x04)
 #define MTK_EVT_SPEED    (1<<0x05)
 #define MTK_EVT_START    (1<<0x07)
+#define MTK_EVT_WAYPT    (1<<0x10)  /* Holux waypoint follows... */
 
 /* *************************************** */
 
@@ -143,7 +145,7 @@ struct log_type {
    int id;
    int size;
    const char *name;
-} log_type[] =  {
+} log_type[32] =  {
    { 0, 4, "UTC" },
    { 1, 2, "VALID" },
    { 2, 8, "LATITUDE,N/S"},
@@ -163,7 +165,8 @@ struct log_type {
    { 16, 2, "SNR"},
    { 17, 2, "RCR"},
    { 18, 2, "MILLISECOND"},
-   { 19, 8, "DISTANCE" }
+   { 19, 8, "DISTANCE" }, 
+   { 20, 0, NULL}, 
 };
 
 struct sat_info {
@@ -214,14 +217,17 @@ enum MTK_DEVICE_TYPE {
 static void *fd;  /* serial fd */
 static FILE *fl;  /* bin.file fd */
 static char *port; /* serial port name */
-static char *erase;  /* erase ? command option */
+static char *OPT_erase;  /* erase ? command option */
+static char *OPT_erase_only;  /* erase_only ? command option */
+static char *OPT_log_enable;  /* enable ? command option */
 static char *csv_file; /* csv ? command option */
 static enum MTK_DEVICE_TYPE mtk_device = MTK_LOGGER;
 
 struct mtk_loginfo mtk_info;
 
 const char LIVE_CHAR[4] = {'-', '\\','|','/'};
-const char TEMP_DATA_BIN[]= "data.bin";
+static const char TEMP_DATA_BIN[]= "data.bin";
+static const char TEMP_DATA_BIN_OLD[]= "data_old.bin";
 
 
 const char CMD_LOG_DISABLE[]= "$PMTK182,5*20\r\n";
@@ -241,7 +247,11 @@ static int mtk_parse_info(const unsigned char *data, int dataLen);
 // Arguments for log fetch 'mtk' command..
 
 static arglist_t mtk_sargs[] = {
-    { "erase", &erase, "Erase device data after download",
+    { "erase", &OPT_erase, "Erase device data after download",
+        "0", ARGTYPE_BOOL, ARG_NOMINMAX },
+    { "erase_only", &OPT_erase_only, "Only erase device data, do not download anything",
+	    "0", ARGTYPE_BOOL, ARG_NOMINMAX }, 
+    { "log_enable", &OPT_log_enable, "Enable logging after download",
         "0", ARGTYPE_BOOL, ARG_NOMINMAX },
     { "csv",   &csv_file, "MTK compatible CSV output file",
         NULL, ARGTYPE_STRING, ARG_NOMINMAX },
@@ -373,10 +383,11 @@ static void mtk_rd_init(const char *fname){
     int rc;
     
     port = xstrdup(fname);
-
+    
+    errno = 0;
     dbg(1, "Opening port %s...\n", fname);
-    if (fd = gbser_init(port), NULL == fd) {
-        fatal(MYNAME ": Can't initialise port \"%s\"\n", port);
+    if ( (fd = gbser_init(port)) == NULL ) {
+        fatal(MYNAME ": Can't initialise port \"%s\" (%s)\n", port, strerror(errno));
     }
     
     // verify that we have a MTK based logger...
@@ -453,17 +464,34 @@ static void mtk_read(void){
   char cmd[256];
   char *line = NULL;
   unsigned char crc, *data = NULL;
-  int cmdLen, j, bsize, i, len, ff_len, rc, init_scan, retry_cnt, log_enabled;
+  int cmdLen, j, bsize, i, len, ff_len, null_len, rc, init_scan, retry_cnt, log_enabled;
   unsigned int line_size, data_size, data_addr, addr, addr_max;
+  unsigned long dsize, dpos = 0;
   FILE *dout;
   char *fusage = NULL;
 
+
+   if ( *OPT_erase_only != '0' ) {
+      mtk_erase();
+      return;
+   } 
+
   log_enabled = 0;
   init_scan = 0;
-  dout = fopen(TEMP_DATA_BIN, "wb");
+  dout = fopen(TEMP_DATA_BIN, "r+b");
   if ( dout == NULL ){
-     fatal(MYNAME ": Can't create temporary file %s", TEMP_DATA_BIN);
-     return;
+     dout = fopen(TEMP_DATA_BIN, "wb");
+     if ( dout == NULL ){
+        fatal(MYNAME ": Can't create temporary file %s", TEMP_DATA_BIN);
+        return;
+     }
+  }
+  fseek(dout, 0L,SEEK_END);
+  dsize = ftell(dout);
+  if ( dsize > 1024 ){
+     dbg(1, "Temp %s file exists. with size %d\n", TEMP_DATA_BIN, dsize);
+     dpos = 0;
+     init_scan = 1;
   }
   dbg(1, "Download %s -> %s\n", port, TEMP_DATA_BIN);
 
@@ -494,10 +522,23 @@ static void mtk_read(void){
    }  
   
   if ( addr_max == 0 ) { // get flash usage failed...      
-    addr_max = 0x200000-64*1024;  // 16Mbit/2Mbyte/32x64kByte block. -- fixme Q1000-ng has 32Mbit 
+    addr_max = 0x200000;  // 16Mbit/2Mbyte/32x64kByte block. -- fixme Q1000-ng has 32Mbit 
     init_scan = 1;
   }
   dbg(1, "Download %dkB from device\n", (addr_max+1) >> 10);
+
+  if ( dsize > addr_max ){
+     dbg(1, "Temp %s file (%ld) is larger than data size %d. Data erased since last download !\n", TEMP_DATA_BIN, dsize, addr_max);
+     fclose(dout);
+     dsize = 0;
+     init_scan = 0;
+     rename(TEMP_DATA_BIN, TEMP_DATA_BIN_OLD);
+     dout = fopen(TEMP_DATA_BIN, "wb");
+     if ( dout == NULL ){
+        fatal(MYNAME ": Can't create temporary file %s", TEMP_DATA_BIN);
+        return;
+     }
+  }
 
   bsize = 0x0400;
   addr  = 0x0000;
@@ -548,21 +589,36 @@ mtk_retry:
                i = 20;
                j = 0;
                ff_len = 0; // number of 0xff bytes.
+               null_len = 0; // number of 0x00 bytes.
                while ( i < (len-3) ){
                   data[j] = (isdigit(line[i])?(line[i]-'0'):(line[i]-'A'+0xA))*0x10 +
                             (isdigit(line[i+1])?(line[i+1]-'0'):(line[i+1]-'A'+0xA));
                   if ( data[j] == 0xff )
                      ff_len++;
+                  if ( data[j] == 0x00 )
+                     null_len++;
                   i += 2;
                   j++;          
                }
                if ( init_scan ){
-                  if ( ff_len == j ){ // data in sector - we've found max sector..
+                  if ( dsize > 0 && addr < dsize ){
+                    fseek(dout, addr, SEEK_SET);
+                    if ( fread(line, 1, bsize, dout) == bsize && memcmp(line, data, bsize) == 0 ){
+                       dpos = addr;
+                       dbg(2, "%s same at %d\n", TEMP_DATA_BIN, addr);
+                    } else {
+                       dbg(2, "%s differs at %d\n", TEMP_DATA_BIN, addr);
+                    }   
+                 }
+                 if ( ff_len == j ){ // data in sector - we've found max sector..
                      addr_max = addr;
-                     dbg(3, "### Init scan complete - max block is 0x%6x!!! ###\n", addr_max);
+                     dbg(1, "Initial scan done - Download %dkB from device\n", (addr_max+1) >> 10);
                   }   
                   len = 0;
                } else {
+                  if ( null_len == j ){ // 0x00 block - bad block....
+                     fprintf(stderr, "FIXME -- read bad block at 0x%.6x - retry ? skip ?\n%s\n", data_addr, line);
+                  }
                   if ( fwrite(data, 1, j, dout) != j )
                      fatal(MYNAME ": Failed to write temp. binary file\n");
                   if ( ff_len == j ){ // 0xff block - read complete...
@@ -573,18 +629,26 @@ mtk_retry:
                      len = 0;
                   }
                }    
-            } 
+            } else if ( strncmp(line, "$PMTK001,182,7,", 15) == 0 ){ // Command ACK
+               if ( line[15] != '3' ) {
+                  // fixme - we should timeout here when no log data has been received...
+                  dbg(2, "\nLog req. failed (%c)\n", line[15]);
+                  gb_sleep(10*1000);
+                  retry_cnt++;
+                  goto mtk_retry;
+               }   
+            }
          }
       } while ( len != 0 );
       if ( init_scan ){
          addr += 0x10000;
          if ( addr >= addr_max ){ // initial scan complete...
             init_scan = 0;
-            addr = 0x0000;
+            addr = dpos;
          }
       } else {
          addr += bsize;
-         if ( global_opts.verbose_status || global_opts.debug_level >= 2 ){
+         if ( global_opts.verbose_status || (global_opts.debug_level >= 2 && global_opts.debug_level < 5) ){
             int perc;
             perc = 100 - 100*(addr_max-addr)/addr_max;
             if ( addr >= addr_max ) 
@@ -595,10 +659,11 @@ mtk_retry:
   }
   if ( dout != NULL )
      fclose(dout);
-   if ( global_opts.verbose_status || global_opts.debug_level >= 2 )
+   if ( global_opts.verbose_status || (global_opts.debug_level >= 2 && global_opts.debug_level < 5) )
       fprintf(stderr,"\n");
 
-  if ( log_enabled ){
+  // Fixme - Order or. Enable - parse - erase ??
+  if ( log_enabled || *OPT_log_enable=='1' ){
      i = do_cmd(CMD_LOG_ENABLE, "PMTK001,182,4,3", NULL, 2);
      dbg(3, " ---- LOG ENABLE ----%s\n", i==0?"Success":"Fail");
   } else {
@@ -614,7 +679,7 @@ mtk_retry:
   file_deinit();   
  
    /* fixme -- we're assuming all went well - erase flash.... */
-   if ( *erase != '0' ) {
+   if ( *OPT_erase != '0' ) {
       mtk_erase();
    } 
      
@@ -697,8 +762,12 @@ static int add_trackpoint(int idx, unsigned long bmask, struct data_item *itm){
        trk->sat = itm->sat_used;
 
     // RCR is a bitmask of possibly several log reasons..
+    // Holux devics use a Event prefix for each waypt. 
     if ( global_opts.masked_objective & WPTDATAMASK
-       && bmask & (1<<RCR) && itm->rcr & 0x0008  )
+       && (   (bmask & (1<<RCR) && itm->rcr & 0x0008) 
+            || (mtk_info.track_event & MTK_EVT_WAYPT)
+          )
+       )
     {
        /* Button press -- create waypoint, start count at 1 */
        waypoint *w = waypt_dupe(trk);
@@ -1043,10 +1112,15 @@ int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
    } /* for (bmap,...) */
  
    if ( mtk_device == MTK_LOGGER ){  // Holux skips '*' checksum separator
-      if ( data[i] == '*' )
+      if ( data[i] == '*' ){
          i++; // skip '*' separator
-      else 
-         dbg(1,"Missing '*' !\n");   
+      } else {
+         dbg(1,"Missing '*' !\n");
+         if ( data[i] == 0xff ){ // in some case star-crc hasn't been written on power off.
+            dbg(1, "Bad data point @0x%.6x - skip %d bytes\n", (fl!=NULL)?ftell(fl):-1, i+2);
+            return i+2; // include '*' and crc
+         }
+      }
    }
    if ( memcmp(&data[0], &LOG_RST[0], 6) == 0 
         && memcmp(&data[12], &LOG_RST[12], 4) == 0  )
@@ -1057,7 +1131,7 @@ int mtk_parse(unsigned char *data, int dataLen, unsigned int bmask){
    }    
 
    if ( data[i] != crc ){
-      dbg(0,"%2d: Bad CRC %.2x != %.2x\n", count, data[i], crc);
+      dbg(0,"%2d: Bad CRC %.2x != %.2x (pos 0x%.6x)\n", count, data[i], crc, (fl!=NULL)?ftell(fl):-1);
    }
    i++; // crc         
    count++;
@@ -1091,6 +1165,8 @@ static int mtk_parse_info(const unsigned char *data, int dataLen){
             dbg(1, "# Log bitmask is: %.8x\n", bm);
             if ( mtk_device != MTK_LOGGER ) 
                bm &= 0x7fffffffU;
+            if ( mtk_device == HOLUX_GR245 )
+               bm &= ~HOLUX245_MASK;
             if ( mtk_info.bitmask != bm ){
                dbg(1," ########## Bitmask Change   %.8x -> %.8x ###########\n", mtk_info.bitmask, bm);
                mtk_info.track_event |= MTK_EVT_BITMASK;
@@ -1135,7 +1211,7 @@ static int mtk_parse_info(const unsigned char *data, int dataLen){
    } else {
       if ( global_opts.debug_level > 0 ){
         fprintf(stderr,"#!! Invalid INFO block !! %d bytes\n >> ", dataLen);
-        for (bm=0;bm<16;bm++) printf("%.2x ", data[bm]);
+        for (bm=0;bm<16;bm++) fprintf(stderr, "%.2x ", data[bm]);
         fprintf(stderr,"\n");
       }
       return 0;
@@ -1147,11 +1223,20 @@ static int mtk_log_len(unsigned int bitmask){
    int i, len;
    
    /* calculate the length of a binary log item. */
-   len = 2; // add '*' + crc, holux would only be +1, oh, well...
+    switch ( mtk_device ){
+       case HOLUX_M241:
+       case HOLUX_GR245:    
+          len = 1; // add crc 
+          break;
+       case MTK_LOGGER:
+       default:
+         len = 2; // add '*' + crc
+         break;
+   }
    for (i=0;i<32;i++){
       if ( (1<<i) & bitmask ){
-         if ( i > DISTANCE )
-            fprintf(stderr, "WARNING: Unknown size/meaning of bit %d\n", i);
+         if ( i > DISTANCE && global_opts.debug_level > 0 )
+            warning(MYNAME ": Unknown size/meaning of bit %d\n", i);
          if ( (i == SID || i == ELEVATION || i == AZIMUTH || i == SNR) && (1<<SID) & bitmask )
             len += log_type[i].size*32; // worst case, max sat. count..
          else
@@ -1247,20 +1332,19 @@ static void file_read(void) {
    /* get default bitmask, log period/speed/distance */
    bLen = fread(buf, 1, 20, fl);
    if ( bLen == 20 ){
-      unsigned int mask, log_period, log_distance, log_speed;
-       
+      unsigned int mask, log_period, log_distance, log_speed, log_policy;
+      log_policy   = le_read16(buf + 6);
+
+      if ( !(log_policy == 0x0104 || log_policy == 0x0106) && fsize > 0x10000 ){
+         dbg(1, "Invalid initial log policy 0x%.4x - check next block\n", log_policy);
+         fseek(fl, 0x10000, SEEK_SET);
+         bLen = fread(buf, 1, 20, fl);
+         log_policy   = le_read16(buf + 6);
+      }       
       mask = le_read32(buf + 2);
       if ( mtk_device != MTK_LOGGER ) { // clear Holux-specific 'low precision' bit
          mask &= 0x7fffffffU;
       }
-      if ( mask & HOLUX245_MASK ){
-         // Holux245 semibroken device..
-         mtk_device = HOLUX_GR245; 
-         holux245_init();
-         mask &= ~HOLUX245_MASK;
-      }
-
-      // log_policy   = le_read16(buf + 6);
       log_period   = le_read32(buf + 8);
       log_distance = le_read32(buf + 12);
       log_speed    = le_read32(buf + 16);
@@ -1275,10 +1359,10 @@ static void file_read(void) {
       mtk_info.speed  = log_speed;
    }
    mtk_info.track_event = 0;
-   
+
    pos = 0x200; // skip header...first data position 
    fseek(fl, pos, SEEK_SET);  
-   
+
    /* read initial info blocks -- if any */   
    do {
       bLen = fread(buf, 1, 16, fl);
@@ -1310,12 +1394,21 @@ static void file_read(void) {
             mtk_parse_info(&buf[i], (bLen-i));
             k = 16;
          } else if  ( is_holux_string(&buf[i], (bLen - i)) ) {
+            if ( memcmp(&buf[i+10], "WAYPNT", 6) == 0 )
+               mtk_info.track_event |= MTK_EVT_WAYPT;
+
             k = 16;
-            // HOLUXGR245LOGGER<SP><SP><SP><SP> or HOLUXGR245WAYPNT<SP><SP><SP><SP>
-            if ( memcmp(&buf[i+16], "    ", 4) == 0 ) // Assume loglen >= 20...
+            // m241  - HOLUXGR241LOGGER or HOLUXGR241WAYPNT
+            // gr245 - HOLUXGR245LOGGER<SP><SP><SP><SP> or HOLUXGR245WAYPNT<SP><SP><SP><SP>
+            if ( memcmp(&buf[i+16], "    ", 4) == 0 ){ // Assume loglen >= 20...
+               if ( mtk_device != HOLUX_GR245 ){
+                 dbg(2, "Detected Holux GR245 !\n");
+                 holux245_init();
+               }
                k += 4;
+            }   
          } else if  ( buf[i] == 0xff && buf[i+1] == 0xff  && buf[i+2] == 0xff && buf[i+3] == 0xff
-               /* && (pos + 2*logLen) & 0xffff) < logLen */)
+                /* && ((pos + 2*mtk_info.logLen) & 0xffff) < mtk_info.logLen */  )
          {
             /* End of 64k block segment -- realign to next data area */
 

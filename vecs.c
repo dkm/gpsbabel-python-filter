@@ -45,6 +45,7 @@ extern ff_vecs_t compegps_vecs;
 extern ff_vecs_t copilot_vecs;
 extern ff_vecs_t coto_vecs;
 extern ff_vecs_t cst_vecs;
+extern ff_vecs_t delbin_vecs;
 extern ff_vecs_t dg100_vecs;
 extern ff_vecs_t easygps_vecs;
 extern ff_vecs_t garmin_vecs;
@@ -98,6 +99,8 @@ extern ff_vecs_t psp_vecs;
 extern ff_vecs_t quovadis_vecs;
 extern ff_vecs_t saroute_vecs;
 extern ff_vecs_t shape_vecs;
+extern ff_vecs_t skytraq_vecs;
+extern ff_vecs_t skytraq_fvecs;
 #if CSVFMTS_ENABLED
 extern ff_vecs_t stmsdf_vecs;
 #endif
@@ -134,7 +137,6 @@ extern ff_vecs_t random_vecs;
 extern ff_vecs_t xol_vecs;
 extern ff_vecs_t navilink_vecs;
 extern ff_vecs_t pykml_vecs;
-extern ff_vecs_t tracktest_vecs;
 extern ff_vecs_t ik3d_vecs;
 extern ff_vecs_t osm_vecs;
 extern ff_vecs_t destinator_poi_vecs;
@@ -162,6 +164,9 @@ extern ff_vecs_t skyforce_vecs;
 extern ff_vecs_t v900_vecs;
 extern ff_vecs_t pocketfms_bc_vecs;
 extern ff_vecs_t pocketfms_fp_vecs;
+extern ff_vecs_t pocketfms_wp_vecs;
+extern ff_vecs_t enigma_vecs;
+extern ff_vecs_t vpl_vecs;
 
 static
 vecs_t vec_list[] = {
@@ -469,12 +474,20 @@ vecs_t vec_list[] = {
                 "Holux M-241 (MTK based) Binary File Format",
                 "bin"
         },
+#endif // MAXIMAL_ENABLED
         {
                 &wbt_svecs,
                 "wbt",
                 "Wintec WBT-100/200 GPS Download",
                 NULL
         },
+		{
+				&vpl_vecs,
+				"vpl",
+				"Honda/Acura Navigation System VP Log File Format",
+				NULL
+		},
+#if MAXIMAL_ENABLED
         {
                 &wbt_fvecs,
                 "wbt-bin",
@@ -913,8 +926,14 @@ vecs_t vec_list[] = {
         {
         	&pocketfms_fp_vecs,
         	"pocketfms_fp",
-        	"PocketFMS flightplan",
-        	NULL
+        	"PocketFMS flightplan (.xml)",
+        	"xml"
+        },
+        {
+        	&pocketfms_wp_vecs,
+        	"pocketfms_wp",
+        	"PocketFMS waypoints (.txt)",
+        	"txt"
         },
         {
         	&v900_vecs,
@@ -928,7 +947,30 @@ vecs_t vec_list[] = {
         	"Naviguide binary route file (.twl)",
         	"twl"
         },
-
+        {
+        	&enigma_vecs,
+        	"enigma",
+        	"Enigma binary waypoint file (.ert)",
+        	"ert"
+        },
+	{
+		&delbin_vecs, 
+		"delbin",
+		"DeLorme PN-20/PN-30/PN-40 USB protocol",
+		NULL
+	}, 
+        {
+                &skytraq_vecs,
+                "skytraq",
+                "SkyTraq Venus based loggers (download)",
+                NULL
+        },
+        {
+                &skytraq_fvecs,
+                "skytraq-bin",
+                "SkyTraq Venus based loggers Binary File Format",
+                "bin"
+        },
 #endif // MAXIMAL_ENABLED
 	{
 	        &pykml_vecs,
@@ -936,13 +978,6 @@ vecs_t vec_list[] = {
                 "KML with Python",
                 "pykml"
 	},
-	{
-	        &tracktest_vecs,
-                "tracktest",
-                "Sample live tracking simulator",
-                "tracktest"
-	},
-
 	{
 		NULL,
 		NULL,
@@ -967,6 +1002,12 @@ init_vecs(void)
 	}
 }
 
+int
+is_integer(const char *c)
+{
+	return isdigit(c[0]) || ((c[0] == '+' || c[0] == '-') && isdigit(c[1]));
+}
+
 void 
 exit_vecs( void )
 {
@@ -980,7 +1021,7 @@ exit_vecs( void )
 			for ( ap = vec->vec->args; ap->argstring; ap++ ) {
 				if ( ap->defaultvalue && 
 					( ap->argtype == ARGTYPE_INT ) &&
-					! isdigit(ap->defaultvalue[0])) {
+					! is_integer(ap->defaultvalue)) {
 					warning("%s: not an integer\n", ap->argstring);
 				}
 				if ( ap->argvalptr ) {
@@ -1232,11 +1273,14 @@ get_option(const char *iarglist, const char *argname)
 			 * return "bar".   Otherwise, we assume we have
 			 * simply "foo" so we return that.
 			 */
-			if (argp[arglen] == '=')
+            if (argp[arglen] == '=') {
 				rval = argp + arglen + 1;
-			else
+                break;
+            }
+            else if (argp[arglen] == '\0') {
 				rval = argp;
-			break;
+                break;
+            }
 		}
 	}
 	/*

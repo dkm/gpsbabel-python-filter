@@ -484,7 +484,15 @@ ozi_parse_waypt(int field, char *str, waypoint * wpt_tmp, ozi_fsdata *fsdata)
 	ozi_set_time_str(str, wpt_tmp);
         break;
     case 5:
-        /* icons 0-xx */
+        /* icons 0-xx.   Ozi seems to use some kind of internal tables to
+	   pick numbers for icons based on GPS type.  We don't know what those
+           tables are, so we read just the numbers.  This converts badly to
+           other types, but it at least maintains fidelity for an ozi->ozi 
+           operation. */
+	if (str && isdigit(str[0])) {
+	    wpt_tmp->icon_descr = xstrdup(str);
+	    wpt_tmp->wpt_flags.icon_descr_is_dynamic = 1;
+        }
         break;
     case 6:
         /* unknown - always 1 */
@@ -803,6 +811,7 @@ ozi_waypt_pr(const waypoint * wpt)
     char *shortname;
     int faked_fsdata = 0;
     ozi_fsdata *fs = NULL;
+    int icon = 0;
 
     fs = (ozi_fsdata *) fs_chain_find(wpt->fs, FS_OZI);
 
@@ -845,9 +854,13 @@ ozi_waypt_pr(const waypoint * wpt)
 
     index++;
 
+    if(wpt->icon_descr && isdigit(wpt->icon_descr[0])) {
+        icon = atoi(wpt->icon_descr);
+    }
+
     gbfprintf(file_out,
             "%d,%s,%.6f,%.6f,%s,%d,%d,%d,%d,%d,%s,%d,%d,",
-            index, shortname, wpt->latitude, wpt->longitude, ozi_time, 0,
+            index, shortname, wpt->latitude, wpt->longitude, ozi_time, icon,
             1, 3, fs->fgcolor, fs->bgcolor, description, 0, 0);
     if (WAYPT_HAS(wpt, proximity) && (wpt->proximity > 0))
 	gbfprintf(file_out, "%.1f,", wpt->proximity * prox_scale);

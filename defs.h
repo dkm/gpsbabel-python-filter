@@ -110,7 +110,9 @@
 #  if _MSC_VER
 #    pragma warning(disable:4244)
 #  endif
+#if !defined _CRT_SECURE_NO_DEPRECATE
 #  define _CRT_SECURE_NO_DEPRECATE 1
+#endif
 #endif
 
 /* Pathname separator character */
@@ -237,7 +239,8 @@ typedef enum {
 	gt_benchmark, /* Extension to Groundspeak for GSAK */
 	gt_cito,
 	gt_ape,
-	gt_mega
+	gt_mega,
+	gt_wherigo
 } geocache_type;
 
 typedef enum {
