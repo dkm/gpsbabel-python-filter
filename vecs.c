@@ -137,7 +137,6 @@ extern ff_vecs_t random_vecs;
 extern ff_vecs_t xol_vecs;
 extern ff_vecs_t navilink_vecs;
 extern ff_vecs_t pykml_vecs;
-extern ff_vecs_t tracktest_vecs;
 extern ff_vecs_t ik3d_vecs;
 extern ff_vecs_t osm_vecs;
 extern ff_vecs_t destinator_poi_vecs;
@@ -979,13 +978,6 @@ vecs_t vec_list[] = {
                 "KML with Python",
                 "pykml"
 	},
-	{
-	        &tracktest_vecs,
-                "tracktest",
-                "Sample live tracking simulator",
-                "tracktest"
-	},
-
 	{
 		NULL,
 		NULL,
