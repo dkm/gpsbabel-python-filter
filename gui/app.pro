@@ -1,11 +1,13 @@
-# $Id: app.pro,v 1.3 2009/07/19 03:41:41 robertl Exp $
+# $Id: app.pro,v 1.12 2009/10/04 01:35:51 robertl Exp $
 #
 
-#CONFIG += qt debug console
 CONFIG += qt release 
+#CONFIG += qt debug console
 
 # For Mac, build Universal binary.   Ignored on other OSes.
-CONFIG += x86 ppc
+CONFIG += x86 # ppc
+
+ICON = images/appicon.icns
 
 QT += network \
     xml \
@@ -16,22 +18,18 @@ unix:MOC_DIR = objects
 unix:OBJECTS_DIR = objects
 unix:RCC_DIR = objects
 
-win32:LIBS += SHELL32.LIB
+mac:LIBS += -framework IOKit
 
 UI_DIR = tmp
 
 RESOURCES = app.qrc 
 RC_FILE = app.rc
 
-win32:TARGET=gpsbabelfe
+mac:TARGET=GPSBabelFE
+win32:TARGET=GPSBabelFE
 unix:TARGET=gpsbabelfe-bin
 
-extras.commands = (make -f makeextras.mak)
-extras.target = extras
-QMAKE_EXTRA_TARGETS += extras
-#POST_TARGETDEPS=extras
-
-FORMS += mainui.ui
+FORMS += mainwinui.ui
 FORMS += advui.ui
 FORMS += aboutui.ui
 FORMS += trackui.ui
@@ -40,6 +38,7 @@ FORMS += wayptsui.ui
 FORMS += rttrkui.ui
 FORMS += miscfltui.ui
 FORMS += gmapui.ui
+FORMS += upgrade.ui
 
 SOURCES += advdlg.cpp
 SOURCES += dpencode.cpp
@@ -50,8 +49,7 @@ SOURCES += gmapdlg.cpp
 SOURCES += aboutdlg.cpp
 SOURCES += main.cpp
 SOURCES += help.cpp
-SOURCES += maindlg.cpp
-SOURCES += persistdlg.cpp
+SOURCES += mainwindow.cpp
 SOURCES += format.cpp
 SOURCES += filterdata.cpp
 SOURCES += formatload.cpp
@@ -59,9 +57,12 @@ SOURCES += optionsdlg.cpp
 SOURCES += processwait.cpp
 SOURCES += filterwidgets.cpp
 SOURCES += filterdlg.cpp
+SOURCES += upgrade.cpp
+macx:SOURCES += serial_mac.cpp
+unix:SOURCES += serial_unix.cpp
+windows:SOURCES += serial_win.cpp
 
-
-HEADERS += maindlg.h
+HEADERS += mainwindow.h
 HEADERS += map.h
 HEADERS += gmapdlg.h
 HEADERS += gpx.h
@@ -74,11 +75,11 @@ HEADERS += help.h
 HEADERS += format.h
 HEADERS += formatload.h
 HEADERS += optionsdlg.h
-HEADERS += persistdlg.h
 HEADERS += processwait.h
 HEADERS += filterwidgets.h
 HEADERS += filterdata.h
 HEADERS += setting.h
+HEADERS += upgrade.h
 
 TRANSLATIONS += gpsbabelfe_de.ts
 TRANSLATIONS += gpsbabelfe_es.ts

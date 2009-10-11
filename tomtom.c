@@ -75,7 +75,7 @@ wr_deinit(void)
 }
 
 #define read_long(f) gbfgetint32((f))
-#define read_char(f) (unsigned char)gbfgetc((f))
+#define read_char(f) gbfgetc((f))
 
 /*
  *  Decode a type 8 compressed record
@@ -135,9 +135,17 @@ decode_latlon(double *lat, double *lon)
 }
 
 static void
+check_recsize(int sz)
+{
+	if ((sz > 100000) || (sz < 0)) {
+		fatal(MYNAME ":malformed file.  Bad record size.");
+	}
+}
+
+static void
 data_read(void)
 {
-	unsigned char rectype;
+	int rectype;
 	long recsize;
 	long x;
 	long y;
@@ -145,6 +153,9 @@ data_read(void)
 	waypoint *wpt_tmp;
 	while (!gbfeof( file_in ) ) {
 		rectype = read_char( file_in );
+                if (rectype == EOF) {
+			fatal(MYNAME ":Unexpected EOF.");
+                }
 		if (global_opts.debug_level >= 5)
 			printf("Reading record type %d\n", rectype );
                 switch (rectype) {
@@ -153,10 +164,10 @@ data_read(void)
 			if (global_opts.debug_level >= 5)
 				printf("Skipping deleted record\n" );
 			recsize = read_long( file_in ) - 5;
+                        check_recsize(recsize);
 			if (global_opts.debug_level >= 5)
 				printf("Skipping %li bytes\n", recsize );
-			while (recsize-- > 0)
-				(void) read_char( file_in );
+                        gbfseek(file_in, recsize, SEEK_CUR);
                         break;
 		  case 1:
 			/* a block header; ignored on read */
@@ -169,6 +180,7 @@ data_read(void)
                   case 2:
                   case 3:
 			recsize = read_long( file_in );
+                        check_recsize(recsize);
 			x = read_long( file_in );
 			y = read_long( file_in );
 			desc = (char *)xmalloc( recsize - 13 );
@@ -192,6 +204,7 @@ data_read(void)
               case 24:
 #if 0 // Fallthrough for now to silently ignore these until this is done.
                 recsize = read_char( file_in ) ;
+                check_recsize(recsize);
 		wpt_tmp = waypt_new();
                 decode_latlon(&wpt_tmp->latitude, &wpt_tmp->longitude);
                 gbfread( tbuf, 3, 1, file_in );
@@ -205,11 +218,11 @@ data_read(void)
               case 9:
               case 25:
                 recsize = read_char( file_in ) + 6;
+                check_recsize(recsize);
                 if (global_opts.debug_level >= 5)
                   warning("Unknown record type 0x%x; skipping %ld bytes.\n",
                           rectype, recsize);
-                 while (recsize--)
-                  (void) read_char( file_in );
+                 gbfseek(file_in, recsize, SEEK_CUR);
                  break;
           default:
                 if (global_opts.debug_level >= 1) {
@@ -269,7 +282,7 @@ compare_lon(const void *a, const void *b)
 #define write_long(f,v) gbfputint32((v),f)
 
 static void
-write_float_as_long( gbfile *file, double value ) 
+write_float_as_long( gbfile *file, double value )
 {
 	long tmp = (value + 0.500000000001);
 	write_long( file, tmp);

@@ -1,5 +1,5 @@
 // -*- C++ -*-
-// $Id: babeldata.h,v 1.1 2009/07/05 21:14:56 robertl Exp $
+// $Id: babeldata.h,v 1.3 2009/08/03 05:16:23 robertl Exp $
 //------------------------------------------------------------------------
 //
 //  Copyright (C) 2009  S. Khai Mong <khai@mangrai.com>.
@@ -25,6 +25,7 @@
 
 #include <QSettings>
 #include <QStringList>
+#include <QUuid>
 #include "setting.h"
 
 
@@ -52,7 +53,10 @@ public:
     debugLevel(-1),
     inputBrowse(QString()),
     outputBrowse(QString()),
-    previewGmap(false)
+    previewGmap(false),
+    upgradeCheckMethod(0),
+    upgradeCheckTime(QDateTime(QDate(2001, 1, 1), QTime(0, 0))),
+    installationUuid(QUuid::createUuid().toString())
   {
   };
   
@@ -92,6 +96,9 @@ public:
     sg.addVarSetting(new StringSetting("app.outputBrowse", outputBrowse));
 
     sg.addVarSetting(new BoolSetting("app.previewGmap", previewGmap));
+    sg.addVarSetting(new IntSetting("app.upgradeCheckMethod", upgradeCheckMethod));
+    sg.addVarSetting(new DateTimeSetting("app.upgradeCheckTime", upgradeCheckTime));
+    sg.addVarSetting(new StringSetting("app.installationUuid", installationUuid));
   }
 
   static const int noType;
@@ -124,6 +131,9 @@ public:
   QString inputBrowse, outputBrowse;
 
   bool  previewGmap;
+  int   upgradeCheckMethod;
+  QDateTime upgradeCheckTime;
+  QString installationUuid;
 
 };
 

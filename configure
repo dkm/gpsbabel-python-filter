@@ -1849,7 +1849,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 # Increase GBBUILD for a new release
 GBBUILD=20
 # YYYYMMDD, please, if beta, i.e. "-beta20060413"
-PACKAGE_RELEASE="-beta20090708"
+PACKAGE_RELEASE="-beta20091003"
 
 cat >>confdefs.h <<_ACEOF
 #define PACKAGE_RELEASE "$PACKAGE_RELEASE"
@@ -3534,7 +3534,7 @@ if (eval "$ac_cpp conftest.$ac_ext") 2>&5 |
 else
   ac_cv_header_stdc=no
 fi
-rm -f conftest*
+rm -f -r conftest*
 
 fi
 
@@ -3555,7 +3555,7 @@ if (eval "$ac_cpp conftest.$ac_ext") 2>&5 |
 else
   ac_cv_header_stdc=no
 fi
-rm -f conftest*
+rm -f -r conftest*
 
 fi
 
@@ -4949,7 +4949,8 @@ fi
 # AC_CHECK_FUNCS([atexit floor localtime_r memmove memset pow select sqrt strchr strcspn strdup strerror strncasecmp strrchr strspn strstr strtol strtoul])
 
 
-for ac_func in nanosleep sleep
+
+for ac_func in nanosleep sleep uname
 do
 as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
 { $as_echo "$as_me:$LINENO: checking for $ac_func" >&5
@@ -5267,7 +5268,7 @@ else
        { $as_echo "$as_me:$LINENO: result: no" >&5
 $as_echo "no" >&6; }
 fi
-ac_config_files="$ac_config_files Makefile gbversion.h xmldoc/makedoc tools/mkcapabilities win32/gpsbabel.rc jeeps/Makefile shapelib/Makefile zlib/empty"
+ac_config_files="$ac_config_files Makefile gbversion.h gui/setup.iss gui/makelinuxdist.sh xmldoc/makedoc tools/mkcapabilities win32/gpsbabel.rc jeeps/Makefile shapelib/Makefile zlib/empty"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -5867,6 +5868,8 @@ do
     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "gbversion.h") CONFIG_FILES="$CONFIG_FILES gbversion.h" ;;
+    "gui/setup.iss") CONFIG_FILES="$CONFIG_FILES gui/setup.iss" ;;
+    "gui/makelinuxdist.sh") CONFIG_FILES="$CONFIG_FILES gui/makelinuxdist.sh" ;;
     "xmldoc/makedoc") CONFIG_FILES="$CONFIG_FILES xmldoc/makedoc" ;;
     "tools/mkcapabilities") CONFIG_FILES="$CONFIG_FILES tools/mkcapabilities" ;;
     "win32/gpsbabel.rc") CONFIG_FILES="$CONFIG_FILES win32/gpsbabel.rc" ;;

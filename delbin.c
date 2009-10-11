@@ -2,7 +2,7 @@
 	DeLorme PN-20/40 USB "DeLBin" protocol
 
     Copyright (C) 2009 Paul Cornett, pc-gpsb at bullseye.com
-    Copyright (C) 2005  Robert Lipe, robertlipe@usa.net
+    Copyright (C) 2005, 2009  Robert Lipe, robertlipe@gpsbabel.org
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 #include <assert.h>
 
 #define MYNAME "delbin"
+static short_handle mkshort_handle;
 
 /*
 Device documentation:
@@ -73,11 +74,15 @@ static unsigned delbin_os_packet_size;
 
 // number of times to attempt a transfer before giving up
 #define ATTEMPT_MAX 2
+// seconds to wait for expected message (actual time will be somewhat
+// indeterminate, but at least READ_TIMEOUT - 1)
+#define READ_TIMEOUT 6
 
-// debug output: low, medium, high
+// debug output: low, medium, high, higher
 #define DBGLVL_L 1
 #define DBGLVL_M 2
 #define DBGLVL_H 3
+#define DBGLVL_H2 4
 
 // Multiple unit support.
 #define DELBIN_MAX_UNITS 32
@@ -92,9 +97,16 @@ static int n_delbin_units;
 
 #define sizeofarray(x) (sizeof(x) / sizeof(x[0]))
 
-static char* opt_getposn;
-static char* opt_logs;
-static char* opt_long_notes;
+static char *opt_getposn = NULL;
+static char *opt_logs = NULL;
+static char *opt_long_notes = NULL;
+static char *opt_nuke_wpt = NULL;
+static char *opt_nuke_trk = NULL;
+static char *opt_nuke_rte = NULL;
+/* If true, Order hint to match Cache Register and Topo 7 */
+static char *opt_hint_at_end = NULL;
+static char *opt_gcsym = NULL;
+
 
 static arglist_t delbin_args[] = {
 	{ "get_posn", &opt_getposn, "Return current position as a waypoint",
@@ -103,11 +115,22 @@ static arglist_t delbin_args[] = {
 		NULL, ARGTYPE_BOOL, ARG_NOMINMAX },
 	{ "long_notes", &opt_long_notes, "Use long waypoint notes regardless of PN version",
 		NULL, ARGTYPE_BOOL, ARG_NOMINMAX },
+	{"nukewpt", &opt_nuke_wpt, "Delete all waypoints before sending", NULL, ARGTYPE_BOOL,
+		ARG_NOMINMAX },
+	{"nuketrk", &opt_nuke_trk, "Delete all tracks before sending", NULL, ARGTYPE_BOOL,
+		ARG_NOMINMAX },
+	{"nukerte", &opt_nuke_rte, "Delete all waypoints before sending", NULL, ARGTYPE_BOOL,
+		ARG_NOMINMAX },
+	{"hint_at_end", &opt_hint_at_end, "If true, geocache hint at end of text", NULL, ARGTYPE_BOOL, ARG_NOMINMAX },
+	{"gcsym", &opt_gcsym, "If set to 0, prefer user-provided symbols over Groundspeaks ones for geocaches", NULL, ARGTYPE_BOOL, ARG_NOMINMAX, "1" },
 	ARG_TERMINATOR
 };
 
 // Whether device understands message 0xb016
 static int use_extended_notes;
+
+// Device capabilities
+static unsigned device_max_waypoint;
 
 static const char* waypoint_symbol(unsigned index);
 static unsigned waypoint_symbol_index(const char* name);
@@ -125,6 +148,9 @@ static waypoint** wp_array;
 #define MSG_ACK 0xaa00
 #define MSG_BREAK 0xaa02
 #define MSG_BREAK_SIZE 33
+#define MSG_CAPABILITIES 0xb001
+#define MSG_DELETE 0xb005
+#define MSG_DELETE_SIZE 67
 #define MSG_NAVIGATION 0xa010
 #define MSG_REQUEST_ROUTES 0xb051
 #define MSG_REQUEST_ROUTES_SIZE 65
@@ -161,6 +187,32 @@ static waypoint** wp_array;
 
 //-----------------------------------------------------------------------------
 // Message structures
+
+// Input Delete Message
+// Message ID: 0xB005
+typedef enum {
+  nuke_type_wpt = 0,
+  nuke_type_trk = 1,
+  nuke_type_rte = 2,
+  // int nuke_map = 3;
+} nuke_type;
+
+typedef enum {
+  nuke_mode_all = 0,
+  nuke_mode_single = 1
+} nuke_mode;
+
+typedef enum {
+  nuke_dest_internal = 0,
+  nuke_dest_sd = 1
+} nuke_dest;
+
+typedef struct {
+	gbuint8 type;
+	gbuint8 mode;
+	gbuint8 location;
+	char object_name[64];
+} msg_delete_t;
 
 // Output Waypoint Message
 // Message ID: 0xB013
@@ -371,6 +423,52 @@ typedef struct {
 	char extra[16];
 } msg_version_t;
 
+// Output Device Capabilities Message
+// Message ID: 0xB001
+typedef struct {
+	gbuint8 max_waypoints[4]; // U32
+	gbuint8 max_tracks[2]; // U16
+	gbuint8 max_track_points[4]; // U32
+	gbuint8 max_routes[2]; // U16
+	gbuint8 max_route_points[4]; // U32
+	gbuint8 max_route_shape_points[4]; // U32
+	gbuint8 max_maps[2]; // U16
+	gbuint8 min_map_version[2]; // U16
+	gbuint8 max_map_version[2]; // U16
+	gbuint8 total_internal_file_memory[4]; // U32
+	gbuint8 avail_internal_file_memory[4]; // U32
+	gbuint8 total_external_file_memory[4]; // U32
+	gbuint8 avail_external_file_memory[4]; // U32
+} msg_capabilities_t;
+
+//-----------------------------------------------------------------------------
+
+#if __APPLE__ || __linux
+	#include <sys/time.h>
+#endif
+
+static void
+debug_out(const char* fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	fputs(MYNAME ": ", stderr);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+}
+
+static void
+debug_out_time(const char* s)
+{
+#if __APPLE__ || __linux
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	debug_out("%u.%03u %s", (unsigned)tv.tv_sec & 0xf, (unsigned)tv.tv_usec / 1000, s);
+#else
+	debug_out("%u %s", (unsigned)time(NULL) & 0xf, s);
+#endif
+}
+
 //-----------------------------------------------------------------------------
 
 static gbuint16
@@ -400,14 +498,18 @@ packet_read(void* buf)
 	}
 	if (global_opts.debug_level >= DBGLVL_H) {
 		unsigned j;
-		warning(MYNAME ": pcktrd ");
+		const gbuint8* p = buf;
+
+		debug_out_time("pcktrd");
 		for (j = 0; j < n; j++) {
-			warning("%02x ", ((gbuint8*)buf)[j]);
+			warning(" %02x", p[j]);
 		}
-		warning("  ");
-		for (j = 0; j < n; j++) {
-			gbuint8 c = ((gbuint8*)buf)[j];
-			warning("%c", isprint(c) ? c : '.');
+		if (global_opts.debug_level >= DBGLVL_H2) {
+			warning("  ");
+			for (j = 0; j < n; j++) {
+				int c = p[j];
+				warning("%c", isprint(c) ? c : '.');
+			}
 		}
 		warning("\n");
 	}
@@ -415,23 +517,27 @@ packet_read(void* buf)
 }
 
 static void
-packet_write(const void* p, unsigned size)
+packet_write(const void* buf, unsigned size)
 {
 	unsigned n;
 	if (global_opts.debug_level >= DBGLVL_H) {
 		unsigned j;
-		warning(MYNAME ": pcktwr ");
+		const gbuint8* p = buf;
+
+		debug_out_time("pcktwr");
 		for (j = 0; j < size; j++) {
-			warning("%02x ", ((gbuint8*)p)[j]);
+			warning(" %02x", p[j]);
 		}
-		warning("  ");
-		for (j = 0; j < size; j++) {
-			gbuint8 c = ((gbuint8*)p)[j];
-			warning("%c", isprint(c) ? c : '.');
+		if (global_opts.debug_level >= DBGLVL_H2) {
+			warning("  ");
+			for (j = 0; j < size; j++) {
+				int c = p[j];
+				warning("%c", isprint(c) ? c : '.');
+			}
 		}
 		warning("\n");
 	}
-	n = delbin_os_ops.packet_write(p, size);
+	n = delbin_os_ops.packet_write(buf, size);
 	if (n != size) {
 		fatal(MYNAME ": short write %u %u\n", size, n);
 	}
@@ -547,9 +653,11 @@ read_depacketize_1(gbuint8** p, unsigned n, int new_packet)
 {
 	static gbuint8 buf[256];
 	static unsigned buf_i, buf_n;
-	while (buf_n == 0 || new_packet) {
+	if (new_packet) {
+		buf_n = 0;
+	}
+	while (buf_n == 0) {
 		packet_read(buf);
-		new_packet = FALSE;
 		if (buf[1] <= delbin_os_packet_size - 2) {
 			buf_n = buf[1];
 			buf_i = 2;
@@ -585,15 +693,18 @@ message_read_1(unsigned msg_id, message_t* m)
 	unsigned id;
 	for (;;) {
 		unsigned total;
+		unsigned n;
 		gbuint8 buf[8];
 		gbuint8* p;
 
-		read_depacketize(buf, 8);
+		n = read_depacketize_1(&p, 8, FALSE);
+		memset(buf, 0, 8);
+		memcpy(buf, p, n);
 		while (buf[0] != 0xdb || buf[1] != 0xfe || checksum(buf, 6) != le_readu16(buf + 6)) {
-			gbuint8* pp;
 			// try for a message start at the beginning of next packet
-			read_depacketize_1(&pp, 8, TRUE);
-			memcpy(buf, pp, 8);
+			n = read_depacketize_1(&p, 8, TRUE);
+			memset(buf, 0, 8);
+			memcpy(buf, p, n);
 		}
 		id = le_readu16(buf + 2);
 		total = le_readu16(buf + 4);
@@ -611,7 +722,7 @@ message_read_1(unsigned msg_id, message_t* m)
 				warning(MYNAME ": received %x\n", id);
 			break;
 		}
-		if (global_opts.debug_level >= DBGLVL_M)
+		if (global_opts.debug_level >= DBGLVL_L)
 			warning(MYNAME ": corrupted message %x\n", id);
 		if (id == msg_id) {
 			id = 0;
@@ -647,13 +758,12 @@ message_ack(unsigned id, const message_t* m)
 }
 
 // Get specific message, ignoring others. Sends ACK for non-interval messages.
-// Gives up if 6 navigation messages are received, which means we waited at least
-// 5 seconds.
+// Gives up after at least READ_TIMEOUT-1 seconds have passed.
 static int
 message_read(unsigned msg_id, message_t* m)
 {
 	unsigned id;
-	int interval_message_count = 0;
+	time_t time_start = time(NULL);
 
 	if (global_opts.debug_level >= DBGLVL_M)
 		warning(MYNAME ": looking for %x\n", msg_id);
@@ -663,14 +773,8 @@ message_read(unsigned msg_id, message_t* m)
 			break;
 		}
 		message_ack(id, m);
-		if (id == msg_id) {
+		if (id == msg_id || time(NULL) - time_start >= READ_TIMEOUT) {
 			break;
-		}
-		if (id == MSG_NAVIGATION) {
-			interval_message_count++;
-			if (interval_message_count == 6) {
-				break;
-			}
 		}
 	}
 	return id == msg_id;
@@ -688,7 +792,7 @@ get_batch(message_t** array, unsigned* n)
 	if (global_opts.debug_level >= DBGLVL_M)
 		warning(MYNAME ": begin get_batch\n");
 	do {
-		unsigned timeout_count = 0;
+		time_t time_start = time(NULL);
 		if (i == array_max) {
 			message_t* old_a = a;
 			array_max += array_max;
@@ -701,13 +805,11 @@ get_batch(message_t** array, unsigned* n)
 			id = message_read_1(0, &a[i]);
 			switch (id) {
 			case MSG_NAVIGATION:
-				timeout_count++;
-				if (timeout_count == 6) {
+				if (time(NULL) - time_start >= READ_TIMEOUT) {
 					success = 0;
 					break;
 				}
 				// fall through
-			case 0:
 			case MSG_ACK:
 			case MSG_NACK:
 			case MSG_SATELLITE_INFO:
@@ -773,12 +875,22 @@ send_batch(int expect_transfer_complete)
 	message_t m;
 	const unsigned n = batch_array_i;
 	unsigned i;
+	unsigned progress = 0;
 
 	message_init(&m);
 	if (global_opts.debug_level >= DBGLVL_M)
 		warning(MYNAME ": begin send_batch, %u messages\n", n);
 	for (i = 0; i < n; i++) {
 		unsigned timeout_count = 0;
+		time_t time_start = time(NULL);
+
+		// Can't really trigger this off either i or n as we don't
+		// know how the various packets map to actual waypts.
+		if (global_opts.verbose_status &&
+		   (batch_array[i].msg_id == MSG_WAYPOINT_IN)) {
+			waypt_status_disp(waypoint_n, ++progress);
+		}
+
 		message_write(batch_array[i].msg_id, &batch_array[i].msg);
 		for (;;) {
 			unsigned id = message_read_1(0, &m);
@@ -786,17 +898,17 @@ send_batch(int expect_transfer_complete)
 			case MSG_ACK:
 				break;
 			case MSG_NAVIGATION:
-				timeout_count++;
-				if (timeout_count > 2) {
-					fatal(MYNAME ": send_batch timed out\n");
-				}
-				if (timeout_count == 2) {
+				if (time(NULL) - time_start >= 2) {
+					if (timeout_count) {
+						fatal(MYNAME ": send_batch timed out\n");
+					}
+					timeout_count++;
 					if (global_opts.debug_level >= DBGLVL_M)
 						warning(MYNAME ": re-sending %x\n", batch_array[i].msg_id);
 					message_write(batch_array[i].msg_id, &batch_array[i].msg);
+					time_start = time(NULL);
 				}
 				// fall through
-			case 0:
 			case MSG_NACK:
 			case MSG_SATELLITE_INFO:
 				continue;
@@ -1010,6 +1122,7 @@ get_gc_notes(const waypoint* wp, int* symbol, char** notes, unsigned* notes_size
 	case gt_benchmark: gc_sym = 172; break;
 	case gt_cito: gc_sym = 167; break;
 	case gt_mega: gc_sym = 166; break;
+	case gt_wherigo: gc_sym = 164; break;
 	case gt_unknown:
 	case gt_locationless:
 	case gt_ape:
@@ -1022,8 +1135,9 @@ get_gc_notes(const waypoint* wp, int* symbol, char** notes, unsigned* notes_size
 		}
 		gbfputc('\n', fd);
 	}
+
 	gbfprintf(fd, "Cache ID: %s\n", wp->shortname);
-	if (gc_sym) {
+	if (gc_sym && atoi(opt_gcsym)) {
 		gbfprintf(fd, "%s\n", waypoint_symbol(gc_sym));
 		*symbol = gc_sym;
 	} else if (wp->icon_descr) {
@@ -1034,9 +1148,11 @@ get_gc_notes(const waypoint* wp, int* symbol, char** notes, unsigned* notes_size
 	case gc_small: size = "Small"; break;
 	case gc_regular: size = "Regular"; break;
 	case gc_large: size = "Large"; break;
-	case gc_unknown:
-	case gc_other:
-	case gc_virtual:
+	case gc_unknown: size = "Not Chosen" ; break;
+	case gc_other: size = "Other"; break;
+        // Device has no symbol for this, but this is what Topo sends.
+	case gc_virtual: size = "Virtual"; break; 
+	default:
 		break;
 	}
 	if (size) {
@@ -1052,7 +1168,7 @@ get_gc_notes(const waypoint* wp, int* symbol, char** notes, unsigned* notes_size
 	} else {
 		gbfprintf(fd, "/T%u\n", wp->gc_data->terr / 10);
 	}
-	if (wp->gc_data->hint) {
+	if (wp->gc_data->hint && !opt_hint_at_end) {
 		gbfprintf(fd, "HINT: %s\n", wp->gc_data->hint);
 	}
 	if (wp->gc_data->desc_short.utfstring || wp->gc_data->desc_long.utfstring) {
@@ -1090,7 +1206,7 @@ get_gc_notes(const waypoint* wp, int* symbol, char** notes, unsigned* notes_size
 			if (logpart) {
 				time_t logtime = xml_parse_time(logpart->cdata, NULL);
 				const struct tm* logtm = gmtime(&logtime);
-				gbfprintf(fd, "%d-%d-%d ", logtm->tm_year + 1900, logtm->tm_mon + 1, logtm->tm_mday);
+				gbfprintf(fd, "%d-%02d-%02d ", logtm->tm_year + 1900, logtm->tm_mon + 1, logtm->tm_mday);
 			}
 			logpart = xml_findfirst(curlog, "groundspeak:finder");
 			if (logpart) {
@@ -1106,6 +1222,9 @@ get_gc_notes(const waypoint* wp, int* symbol, char** notes, unsigned* notes_size
 			}
 			gbfputc('\n', fd);
 		}
+	}
+	if (wp->gc_data->hint && opt_hint_at_end) {
+		gbfprintf(fd, "\nHINT: %s\n", wp->gc_data->hint);
 	}
 	gbfputc(0, fd);
 	*notes_size = fd->memlen;
@@ -1152,6 +1271,25 @@ write_waypoint_notes(const char* notes, unsigned size, const char* name)
 }
 
 static void
+add_nuke(nuke_type type)
+{
+	message_t m;
+	msg_delete_t* p;
+
+	message_init_size(&m, MSG_DELETE_SIZE);
+	p = m.data;
+	p->type = type;
+	p->mode = nuke_mode_all;
+	p->location = nuke_dest_internal;
+	memset(p->object_name, 0, sizeof(p->object_name));
+
+	// MSG_DELETE generates a MSG_TRANSFER_COMPLETE,
+	// so use the batch facility to wait for it
+	add_to_batch(MSG_DELETE, &m);
+	send_batch(TRUE);
+}
+
+static void
 write_waypoint(const waypoint* wp)
 {
 	message_t m;
@@ -1178,9 +1316,10 @@ write_waypoint(const waypoint* wp)
 		get_gc_notes(wp, &symbol, &notes, &notes_size);
 		notes_freeable = notes;
 		if (wp->description) {
-			name = wp->description;
+			name = mkshort(mkshort_handle, wp->description);
 		}
 	}
+
 	if (notes_size > 800) {
 		if (use_extended_notes) {
 			extended_notes_size = notes_size;
@@ -1189,6 +1328,7 @@ write_waypoint(const waypoint* wp)
 			notes_size = 800;
 		}
 	}
+
 	name_size = strlen(name) + 1;
 	if (name_size > 255) {
 		name_size = 255;
@@ -1244,10 +1384,37 @@ write_waypoint(const waypoint* wp)
 static void
 write_waypoints(void)
 {
+	message_t m;
+	unsigned device_n = 0;
+
 	waypoint_i = 0;
 	waypoint_n = waypt_count();
+	if (waypoint_n > device_max_waypoint) {
+		fatal(MYNAME ": waypoint count (%u) exceeds device limit (%u)\n",
+			waypoint_n, device_max_waypoint);
+	}
+
+	message_init_size(&m, 0);
+	message_write(MSG_WAYPOINT_COUNT, &m);
+	if (message_read(MSG_WAYPOINT_COUNT, &m)) {
+		device_n = le_readu32(m.data);
+	}
+
 	waypt_disp_all(write_waypoint);
 	send_batch(TRUE);
+
+	if (device_n + waypoint_n > device_max_waypoint) {
+		m.size = 0;
+		message_write(MSG_WAYPOINT_COUNT, &m);
+		if (message_read(MSG_WAYPOINT_COUNT, &m) &&
+		    le_readu32(m.data) == device_max_waypoint)
+		{
+			warning(MYNAME ": waypoint count (%u already on device + %u added = %u)"
+				" exceeds device limit (%u), some may have been discarded\n",
+				device_n, waypoint_n, device_n + waypoint_n, device_max_waypoint);
+		}
+	}
+	message_free(&m);
 }
 
 //-----------------------------------------------------------------------------
@@ -1988,25 +2155,36 @@ delbin_list_units()
 {
 	int i;
 	for (i = 0; i < n_delbin_units; i++) {
-		printf("%d %s %s\n", 
+		printf("%u %s %s\n", 
 			delbin_unit_info[i].unit_number,
 			delbin_unit_info[i].unit_serial_number,
 			delbin_unit_info[i].unit_name );
 	}
 }
 
-
-
 static void
 delbin_rw_init(const char *fname)
 {
 	message_t m;
+	char buf[256];
+
+	if (!mkshort_handle)
+		mkshort_handle = mkshort_new_handle();
+	//  Contrary to doc, it looks like there's a limit of 32 bytes
+	// and a null terminator is required, at least in F/W 2.6.210726
+	// on a PN-40.
+	setshort_length(mkshort_handle, 31);
+	setshort_whitespace_ok(mkshort_handle, 1);
+	setshort_badchars(mkshort_handle, "");
+	setshort_mustuniq(mkshort_handle, 1);
 
 	delbin_os_ops.init(fname);
 
+	// Often the first packet is part of an old message, sometimes it can
+	// confuse the first message read if we don't get rid of it
+	packet_read(buf);
 	// Send a break to clear any state from a previous failure
-	message_init(&m);
-	m.size = MSG_BREAK_SIZE;
+	message_init_size(&m, MSG_BREAK_SIZE);
 	memset(m.data, 0, m.size);
 	message_write(MSG_BREAK, &m);
 	// get version info
@@ -2021,7 +2199,7 @@ delbin_rw_init(const char *fname)
 		} else if (strstr(p->product, "PN-20")) {
 			use_extended_notes = p->firmware[0] > '1' ||
 				(p->firmware[0] == '1' && p->firmware[2] >= '6');
-		} else if (strstr(p->product, "PN-40")) {
+		} else if (strstr(p->product, "PN-30") || strstr(p->product, "PN-40")) {
 			use_extended_notes = p->firmware[0] > '2' ||
 				(p->firmware[0] == '2' && p->firmware[2] >= '5');
 		}
@@ -2043,6 +2221,9 @@ delbin_rw_init(const char *fname)
 static void
 delbin_rw_deinit(void)
 {
+	if (mkshort_handle) {
+		mkshort_del_handle(&mkshort_handle);
+	}
 	delbin_os_ops.deinit();
 }
 
@@ -2068,12 +2249,25 @@ static void
 delbin_write(void)
 {
 	if (doing_wpts) {
+		message_t m;
+		device_max_waypoint = 1000;
+		message_init_size(&m, 0);
+		message_write(MSG_CAPABILITIES, &m);
+		if (message_read(MSG_CAPABILITIES, &m)) {
+			const msg_capabilities_t* p = m.data;
+			device_max_waypoint = le_readu32(p->max_waypoints);
+		}
+		message_free(&m);
+
+ 		if (opt_nuke_wpt) add_nuke(nuke_type_wpt);
 		write_waypoints();
 	}
 	if (doing_trks) {
+ 		if (opt_nuke_trk) add_nuke(nuke_type_trk);
 		write_tracks();
 	}
 	if (doing_rtes) {
+ 		if (opt_nuke_rte) add_nuke(nuke_type_rte);
 		write_routes();
 	}
 }
@@ -2114,7 +2308,13 @@ ff_vecs_t delbin_vecs = {
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <setupapi.h>
-#include <ddk/hidsdi.h>
+// If hidsdi.h is not found, you need to download the Windows Driver Kit, 
+// from http://www.microsoft.com/whdc/Devtools/wdk/default.mspx
+// You need to install 'build environments' and 'tools' from the SDK and
+// follow the instructions in the Install.html to get MSVC to find the right
+// headers and libraries.
+#include <specstrings.h>
+#include <hidsdi.h>
 
 static HANDLE hid_handle;
 
@@ -2238,6 +2438,7 @@ delbin_os_ops_t delbin_os_ops = {
 #include <IOKit/IOKitLib.h>
 #include <IOKit/IOCFPlugIn.h>
 #include <IOKit/hid/IOHIDLib.h>
+#include <mach/mach_error.h>
 
 // IOHIDDeviceInterface121::getReport() does not work, it hangs the process
 // in some sort of unkillable state.  So reading is done via a separate thread
@@ -2314,7 +2515,8 @@ mac_os_init(const char* fname)
 	(*plugin)->Release(plugin);
 	ir = (*device)->open(device, kIOHIDOptionsTypeSeizeDevice);
 	if (ir)
-		fatal(MYNAME ": device open failed 0x%x\n", (int)ir);
+		fatal(MYNAME ": device open failed 0x%x - %s\n", (int)ir,
+			mach_error_string(ir));
 	ir = (*device)->createAsyncEventSource(device, &run_loop_source);
 	if (ir)
 		fatal(MYNAME ": createAsyncEventSource failed 0x%x\n", (int)ir);
@@ -2790,7 +2992,7 @@ static const char* const waypoint_symbol_name[] = {
 	"Arrow Up Left",
 	"Arrow Up Right",
 	"Arrow Down Left",
-	"Arrow Dow Right",
+	"Arrow Down Right",
 	"Green Star",
 	"Yellow Square",
 	"Red X",
@@ -2854,7 +3056,7 @@ static const char* const waypoint_symbol_name[] = {
 	"Telephone",
 	"Traffic Light",
 	"Fire Hydrant",
-	"Tombstone",
+	"Cemetery",
 	"Picnic Table",
 	"Tent",
 	"Shelter",

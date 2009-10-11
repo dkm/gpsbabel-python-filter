@@ -1,5 +1,5 @@
 // -*- C++ -*-
-// $Id: filterdata.h,v 1.1 2009/07/05 21:14:56 robertl Exp $
+// $Id: filterdata.h,v 1.3 2009/09/02 19:05:27 robertl Exp $
 //------------------------------------------------------------------------
 //
 //  Copyright (C) 2009  S. Khai Mong <khai@mangrai.com>.
@@ -33,6 +33,7 @@
 class FilterData {
 public:
   FilterData(): inUse(true) {};
+  virtual ~FilterData() {};
 
   void saveSettings(QSettings &st) {
     SettingGroup sg;
@@ -61,7 +62,9 @@ class TrackFilterData: public FilterData  {
 		     stop(false),
 		     pack(false), merge(false), split(false), 
 		     GPSFixes(false), GPSFixesVal(0),
-		     course(false), speed(false)
+		     course(false), speed(false),
+		     splitTime(0), splitTimeUnit(0),
+		     splitDist(0), splitDistUnit(0)
   {
     titleString = "ACTIVE LOG #%Y%m%d";
     stopTime = QDateTime::currentDateTime();
@@ -91,6 +94,10 @@ class TrackFilterData: public FilterData  {
     sg.addVarSetting(new IntSetting("trks.secs", secs));
     sg.addVarSetting(new BoolSetting("trks.title", title));
     sg.addVarSetting(new StringSetting("trks.titleString", titleString));
+    sg.addVarSetting(new IntSetting("trks.splitTime", splitTime));
+    sg.addVarSetting(new IntSetting("trks.splitTimeUnit", splitTimeUnit));
+    sg.addVarSetting(new IntSetting("trks.splitDist", splitDist));
+    sg.addVarSetting(new IntSetting("trks.splitDistUnit", splitDistUnit));
   }
   virtual QStringList makeOptionString();
   
@@ -108,6 +115,8 @@ class TrackFilterData: public FilterData  {
   bool pack, merge, split, GPSFixes;
   int  GPSFixesVal;
   bool course, speed;
+  int  splitTime, splitTimeUnit;
+  int  splitDist, splitDistUnit;
 };
 
 //------------------------------------------------------------------------
