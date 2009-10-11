@@ -1,3 +1,9 @@
+gpsbabel (1.3.7cvs20091011-1~ppa2) jaunty; urgency=low
+
+  * track cvs upstream
+
+ -- Marc Poulhiès <dkm@kataplop.net>  Sun, 11 Oct 2009 10:50:03 +0200
+
 gpsbabel (1.3.6cvs23062009-1~ppa1) jaunty; urgency=low
 
   * 'upstream' (github/gpsbabel-python-filter) changes
