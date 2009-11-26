@@ -167,6 +167,8 @@ extern ff_vecs_t pocketfms_fp_vecs;
 extern ff_vecs_t pocketfms_wp_vecs;
 extern ff_vecs_t enigma_vecs;
 extern ff_vecs_t vpl_vecs;
+extern ff_vecs_t teletype_vecs;
+extern ff_vecs_t jogmap_vecs;
 
 static
 vecs_t vec_list[] = {
@@ -699,7 +701,7 @@ vecs_t vec_list[] = {
 	{
 		&gtc_vecs,
 		"gtrnctr",
-		"Garmin Training Center",
+		"Garmin Training Center (.tcx)",
 		"xml"
 	},
 	{
@@ -966,10 +968,22 @@ vecs_t vec_list[] = {
                 NULL
         },
         {
+                &teletype_vecs,
+                "teletype",
+                "Teletype [ Get Jonathon Johnson to describe",
+                NULL
+        },
+        {
                 &skytraq_fvecs,
                 "skytraq-bin",
                 "SkyTraq Venus based loggers Binary File Format",
                 "bin"
+        },
+        {
+                &jogmap_vecs,
+                "jogmap",
+                "Jogmap.de XML format",
+                "xml"
         },
 #endif // MAXIMAL_ENABLED
 	{

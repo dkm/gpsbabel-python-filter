@@ -231,9 +231,17 @@ lowranceusr_readstr(char *buf, const int maxlen, gbfile *file)
 	org = len = gbfgetint32(file);
 	if (len < 0) fatal(MYNAME ": Invalid item length (%d)!\n", len);
 	else if (len) {
+		int i;
 		if (len > maxlen) len = maxlen;
 		(void) gbfread(buf, 1, len, file);
 		if (org > maxlen) (void) gbfseek(file, org - maxlen, SEEK_CUR);
+		// IWay 350C puts 0x01 for the accented o in the street name
+		// of the Montreal Holiday Inn.
+                for (i = 0; i < len; i++) {
+			if (buf[i] == 0x01)
+				buf[i] = '*';
+		}
+
 	}
 
 	return len;
@@ -360,7 +368,7 @@ lowranceusr_parse_waypt(waypoint *wpt_tmp)
 	wpt_tmp->latitude = lat_mm_to_deg(gbfgetint32(file_in));
 	wpt_tmp->longitude = lon_mm_to_deg(gbfgetint32(file_in));
 	wpt_tmp->altitude = FEET_TO_METERS(gbfgetint32(file_in));
-	if (wpt_tmp->altitude <= UNKNOWN_USR_ALTITUDE) {
+	if (METERS_TO_FEET(wpt_tmp->altitude) <= -10000) {
 		wpt_tmp->altitude = unknown_alt;
 	}
 
