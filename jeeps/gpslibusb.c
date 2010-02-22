@@ -22,13 +22,15 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#if HAVE_CONFIG_H
 #include "config.h"
+#endif
 #if HAVE_LIBUSB
 #include <usb.h>
 #include "gps.h"
 #include "garminusb.h"
 #include "gpsusbcommon.h"
-#include "garmin_device_xml.h"
+#include "../garmin_device_xml.h"
 
 #define GARMIN_VID 0x91e
 
@@ -349,6 +351,7 @@ garmin_usb_start(struct usb_device *dev, libusb_unit_data *lud)
 			// feeling there are more affected models either
 			// on the market or on the way.
 			case 695: break;   // Venture HC
+			case 941: break;   // Venture HC, Japanese version.
 			case 957: break;   // Legend H
 			case 285: break;   // GPSMap 276C/4.80
 			case 402: break;   // GPSMap 396C/4.50

@@ -224,6 +224,13 @@ rw_init(const char *fname)
 			break;
 			
 	}
+
+	// If a user has specified a non-default character set, we'll trust
+	// them to sort our the wreckage of violating the Garmin protocol and
+	// ship characters to the device in that character set.
+	if (global_opts.charset != &cet_cs_vec_utf8) {
+		receiver_charset = global_opts.charset_name;
+	}
 	if (global_opts.debug_level > 0)  {
 		fprintf(stderr, "Waypoint type: %d\n"
 			"Chosen waypoint length %d\n",
@@ -232,8 +239,12 @@ rw_init(const char *fname)
 		fprintf(stderr, "Waypoint category type: %d\n",
 		gps_category_type);
 	}
-
 	}
+
+	// Allow override of sent character set for internationalized GPSes.
+	if (global_opts.charset != &cet_cs_vec_utf8)
+		receiver_charset = xstrdup(global_opts.charset_name);
+
 	/*
 	 * If the user provided a short_length, override the calculated value.
 	 */
@@ -640,16 +651,13 @@ pvt2wpt(GPS_PPvt_Data pvt, waypoint *wpt)
         wpt->longitude = pvt->lon;
 	WAYPT_SET(wpt,course,1);
 	WAYPT_SET(wpt,speed,1);
-	/* convert to true course in degrees */
-	if ( pvt->east >= 0.0 )
-		wpt->course = 90 - DEG(atan(pvt->north/pvt->east));
-	else
-		wpt->course = 270 - DEG(atan(pvt->north/pvt->east));
-#if 0
+
+	wpt->course = 180 + DEG(atan2(-pvt->east, -pvt->north));
+
 	/* velocity in m/s */
-	wpt->speed = sqrt(pvt->north*pvt->north + pvt->east*pvt->east);
-	wpt->vs = pvt->up;
-#endif
+	WAYPT_SET(wpt,speed, sqrt(pvt->north*pvt->north + pvt->east*pvt->east));
+	// wpt->vs = pvt->up;
+
 	/*
 	 * The unit reports time in three fields:
 	 * 1) The # of days to most recent Sun. since  1989-12-31 midnight UTC.
@@ -782,7 +790,7 @@ sane_GPS_Way_New(void)
 	way->cross_road[0] = 0;
 	way->cross_road[0] = 0;
 	way->dpth = 1.0e25f;
-	way->wpt_class = 0;
+	way->wpt_class = 0;  // user waypoint by default.
 
 	return way;
 }
@@ -978,6 +986,9 @@ route_waypt_pr(const waypoint *wpt)
 	rte->lon = wpt->longitude;
 	rte->lat = wpt->latitude;
 	rte->smbl = gt_find_icon_number_from_desc(wpt->icon_descr, PCX);
+
+        // map class so unit doesn't duplicate routepoints as a waypoint.
+	rte->wpt_class = 0x80;  
 
 	if (wpt->altitude != unknown_alt) {
 		rte->alt = wpt->altitude;

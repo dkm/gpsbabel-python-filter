@@ -56,9 +56,6 @@ GPS_PPacket GPS_Packet_New(void)
 	return NULL;
     }
 
-    ret->dle = ret->edle = DLE;
-    ret->etx = ETX;
-
     return ret;
 }
 
@@ -271,13 +268,10 @@ GPS_PWay GPS_Way_New(void)
     ret->dst = 0;
     ret->smbl = ret->dspl = ret->colour = ret->alt = ret->prot = INT_MAX;
 
-    if(gps_waypt_type==pD108)
-    {
-	ret->dst  = 0;
-	ret->attr = 0x60;
-	for(i=0;i<7;++i) ret->subclass[i] = 0;
-	for(i=6;i<18;++i) ret->subclass[i] = 0xff;
-    }
+    ret->dst  = 0;
+    ret->attr = 0x60;
+    for(i=0;i<7;++i) ret->subclass[i] = 0;
+    for(i=6;i<18;++i) ret->subclass[i] = 0xff;
         
     return ret;
 }
@@ -304,7 +298,7 @@ void GPS_Way_Del(GPS_PWay *thys)
 **
 ** Lap constructor
 **
-** @return [GPS_PLap] virgin track
+** @return [GPS_PLap] virgin lap
 **********************************************************************/
 
 GPS_PLap GPS_Lap_New(void)
@@ -328,7 +322,7 @@ GPS_PLap GPS_Lap_New(void)
 **
 ** Lap destructor
 **
-** @param [w] thys [GPS_PLap *] track to delete
+** @param [w] thys [GPS_PLap *] lap to delete
 **
 ** @return [void]
 **********************************************************************/

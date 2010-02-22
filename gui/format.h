@@ -1,5 +1,5 @@
 // -*- C++ -*-
-// $Id: format.h,v 1.2 2009/11/02 20:38:02 robertl Exp $
+// $Id: format.h,v 1.6 2010/02/15 02:57:00 robertl Exp $
 //------------------------------------------------------------------------
 //
 //  Copyright (C) 2009  S. Khai Mong <khai@mangrai.com>.
@@ -108,8 +108,11 @@ class Format
 	   writeRoutes(false),
 	   fileFormat(false),
 	   deviceFormat(false),
+           hidden_(false),
 	   extensions(QStringList()),
-           html(QString())
+           html(QString()),
+           readUseCount_(0),
+           writeUseCount_(0)
   {
     inputOptions.clear();
     outputOptions.clear();
@@ -122,17 +125,21 @@ class Format
 	 bool fileFormat, bool deviceFormat,
 	 const QStringList &extensions,
 	 QList<FormatOption> &inputOptions, 
-	 QList<FormatOption> &outputptions, 
+	 QList<FormatOption> &outputptions,
          const QString &html):
     name(name), description(description),
     readWaypoints(readWaypoints), readTracks(readTracks), readRoutes(readRoutes),
     writeWaypoints(writeWaypoints), writeTracks(writeTracks), writeRoutes(writeRoutes),
     fileFormat(fileFormat), deviceFormat(deviceFormat),
+    hidden_(false),
     extensions(extensions),
     inputOptions(inputOptions),
     outputOptions(outputptions),
-    html(QString())
+    html(QString()),
+    readUseCount_(0),
+    writeUseCount_(0)
   {
+    (void)html; // suppress 'unused' warning.
   }
 
   Format(const Format &c):
@@ -140,10 +147,13 @@ class Format
     readWaypoints(c.readWaypoints), readTracks(c.readTracks), readRoutes(c.readRoutes),
     writeWaypoints(c.writeWaypoints), writeTracks(c.writeTracks), writeRoutes(c.writeRoutes),
     fileFormat(c.fileFormat), deviceFormat(c.deviceFormat),
+    hidden_(false),
     extensions(c.extensions),
     inputOptions(c.inputOptions),
     outputOptions(c.outputOptions),
-    html(c.html)
+    html(c.html),
+    readUseCount_(0),
+    writeUseCount_(0)
   {
   }
 
@@ -175,23 +185,37 @@ class Format
 
   bool isDeviceFormat() const { return deviceFormat; };
   bool isFileFormat() const { return   fileFormat; };
+
+  bool isHidden() const { return hidden_; };
+  void setHidden(bool state) { hidden_ = state; };
   
   void saveSettings(QSettings &settings);
   void restoreSettings(QSettings &settings);
   void setToDefault();
   static QString getHtmlBase() { return htmlBase; }
   static void setHtmlBase(const QString &s) { htmlBase = s; }
-
+  
+  void bumpReadUseCount(int v)  { readUseCount_ += v; }
+  void bumpWriteUseCount(int v) { writeUseCount_ += v; }
+  int getReadUseCount()  const { return readUseCount_; }
+  int getWriteUseCount() const { return writeUseCount_; }
+  void zeroUseCounts(void) {
+    readUseCount_ = 0;
+    writeUseCount_= 0;
+  }
+  
  private:
   QString name, description;
   bool readWaypoints, readTracks, readRoutes;
   bool writeWaypoints, writeTracks, writeRoutes;
-  bool fileFormat, deviceFormat;
+  bool fileFormat, deviceFormat, hidden_;
   QStringList extensions;
   QList<FormatOption>inputOptions;
   QList<FormatOption>outputOptions;
   QString html;
   static QString htmlBase;
+  int      readUseCount_;
+  int      writeUseCount_;
   
 };
 

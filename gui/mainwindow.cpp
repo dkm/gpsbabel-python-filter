@@ -1,5 +1,5 @@
 // -*- C++ -*-
-// $Id: mainwindow.cpp,v 1.12 2009/11/02 20:38:02 robertl Exp $
+// $Id: mainwindow.cpp,v 1.17 2010/02/16 02:49:43 robertl Exp $
 //------------------------------------------------------------------------
 //
 //  Copyright (C) 2009  S. Khai Mong <khai@mangrai.com>.
@@ -27,16 +27,17 @@
 #include <QTemporaryFile>
 
 #include "mainwindow.h"
-#include "babeldata.h"
-#include "appname.h"
-#include "help.h"
-#include "advdlg.h"
 #include "aboutdlg.h"
-#include "optionsdlg.h"
+#include "advdlg.h"
+#include "appname.h"
+#include "babeldata.h"
 #include "filterdlg.h"
-#include "processwait.h"
 #include "formatload.h"
 #include "gmapdlg.h"
+#include "help.h"
+#include "optionsdlg.h"
+#include "preferences.h"
+#include "processwait.h"
 #include "upgrade.h"
 #include "../gbversion.h"
 
@@ -106,6 +107,7 @@ static QString MakeOptionsNoLeadingComma(const QList<FormatOption>& options)
   return (str.length()) ? str.mid(1) : str;
 
 }
+
 //------------------------------------------------------------------------
 MainWindow::MainWindow(QWidget* parent): QMainWindow(parent)
 {
@@ -130,6 +132,8 @@ MainWindow::MainWindow(QWidget* parent): QMainWindow(parent)
   connect(ui.actionQuit, SIGNAL(triggered()), this, SLOT(closeActionX()));
   connect(ui.actionHelp, SIGNAL(triggered()), this, SLOT(helpActionX()));
   connect(ui.actionAbout, SIGNAL(triggered()), this, SLOT(aboutActionX()));
+  connect(ui.actionUpgradeCheck, SIGNAL(triggered()), this, SLOT(upgradeCheckActionX()));
+  connect(ui.actionPreferences, SIGNAL(triggered()), this, SLOT(preferencesActionX()));
 
   connect(ui.inputFormatCombo,  SIGNAL(currentIndexChanged(int)),
 	  this,                 SLOT(inputFormatChanged(int)));
@@ -168,8 +172,13 @@ MainWindow::MainWindow(QWidget* parent): QMainWindow(parent)
 
   //--- Restore from registry
   restoreSettings();
-  upgrade = new UpgradeCheck();
-  upgrade->checkForUpgrade(babelVersion, bd.upgradeCheckMethod, bd.upgradeCheckTime, bd.installationUuid);
+
+  upgrade = new UpgradeCheck(parent, formatList);
+  if (bd.startupVersionCheck) {
+    upgrade->checkForUpgrade(babelVersion, bd.upgradeCheckMethod, 
+                             bd.upgradeCheckTime, bd.installationUuid,
+                             bd.reportStatistics);
+  }
 }
 
 //------------------------------------------------------------------------
@@ -245,7 +254,8 @@ void MainWindow::inputFileOptBtnClicked()
   ui.inputFormatCombo->clear();
   for (int i=0; i<indices.size(); i++) {
     int k = indices[i];
-    ui.inputFormatCombo->addItem(formatList[k].getDescription(), QVariant(k));
+    if (!formatList[k].isHidden())
+      ui.inputFormatCombo->addItem(formatList[k].getDescription(), QVariant(k));
   }
   setComboToFormat(ui.inputFormatCombo, fmt, true);
   fmtChgInterlock = false;
@@ -261,7 +271,8 @@ void MainWindow::inputDeviceOptBtnClicked()
   ui.inputFormatCombo->clear();
   for (int i=0; i<indices.size(); i++) {
     int k = indices[i];
-    ui.inputFormatCombo->addItem(formatList[k].getDescription(), QVariant(k));
+    if (!formatList[k].isHidden())
+      ui.inputFormatCombo->addItem(formatList[k].getDescription(), QVariant(k));
   }
   setComboToFormat(ui.inputFormatCombo, fmt, false);
   fmtChgInterlock = false;
@@ -781,13 +792,18 @@ void MainWindow::applyActionX()
   args << (formatList[fidx].getName() + MakeOptions(formatList[fidx].getInputOptions()));
 
   // Input file(s) or device
+  int read_use_count = 0;
   if (bd.inputType == BabelData::fileType) {
-    for (int i=0; i<bd.inputFileNames.size(); i++)
+    for (int i=0; i<bd.inputFileNames.size(); i++) {
       args << "-f" << bd.inputFileNames[i];
+      read_use_count++;
+    }
   }
   else {
     args << "-f" << bd.inputDeviceName;
+    read_use_count++;
   }
+  formatList[fidx].bumpReadUseCount(read_use_count);
 
   // --- Filters!
   args << filterData.getAllFilterStrings();
@@ -807,11 +823,13 @@ void MainWindow::applyActionX()
     // output file or device option
     if (outIsFile) {
       if (bd.outputFileName != "")
-	args << "-F" << bd.outputFileName;
+	      args << "-F" << bd.outputFileName;
     }
     else if (bd.outputType == BabelData::deviceType) {
       args << "-F" << bd.outputDeviceName;
     }
+    // GUI only ever writes a single file at a time.
+    formatList[fidx].bumpWriteUseCount(1);
   }
 
   // Now output for preview in google maps
@@ -943,6 +961,25 @@ void MainWindow::aboutActionX()
   aboutDlg.setWindowTitle(tr("About %1").arg(appName));
   aboutDlg.exec();
 }
+
+//------------------------------------------------------------------------
+void MainWindow::upgradeCheckActionX()
+{
+    upgrade->checkForUpgrade(babelVersion, bd.upgradeCheckMethod, 
+                             QDateTime(), bd.installationUuid,
+                             bd.reportStatistics);
+}
+
+//------------------------------------------------------------------------
+void MainWindow::preferencesActionX()
+{
+  Preferences preferences(0, formatList, bd);
+  preferences.exec();
+
+  // We may have changed the list of displayed formats.  Resynchronize.
+  setWidgetValues();
+}
+
 
 //------------------------------------------------------------------------
 void MainWindow::helpActionX()

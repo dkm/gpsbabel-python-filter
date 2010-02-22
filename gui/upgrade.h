@@ -1,7 +1,7 @@
 #ifndef UPGRADE_H
 #define UPGRADE_H
 /*
-    Copyright (C) 2009  Robert Lipe, robertlipe@gpsbabel.org
+    Copyright (C) 2009, 2010  Robert Lipe, robertlipe@gpsbabel.org
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 
  */
 
-
+#include "format.h"
 #include <QDialog>
 #include <QDateTime>
 #include <QHttp>
@@ -30,7 +30,8 @@ class QHttpResponseHeader;
 class UpgradeCheck : public QObject {
   Q_OBJECT
 public:
-  UpgradeCheck(QWidget *parent = 0);
+  //UpgradeCheck(QWidget *parent = 0);
+  UpgradeCheck(QWidget *parent, QList<Format> &formatList);
   ~UpgradeCheck();
 
   typedef enum {
@@ -42,10 +43,17 @@ public:
   UpgradeCheck::updateStatus checkForUpgrade(const QString &babelVersion, 
 					     int upgradeCheckMethod,
 					     const QDateTime &lastCheckTime,
-					     const QString &installationUuid);
+					     const QString &installationUuid,
+                                             bool reportStatistics
+                                             );
   QDateTime getUpgradeWarningTime() {
     return upgradeWarningTime;
   }
+
+  updateStatus getStatus() {
+    return updateStatus_;
+  }
+  static bool isTestMode(void);
 
 protected:
 
@@ -59,12 +67,11 @@ protected:
   QDateTime upgradeWarningTime;  // invalid time if this object never issued.
   QString getOsName(void);
   QString getOsVersion(void);
-
+  QList<Format> &formatList_;
+  updateStatus updateStatus_;
 
 private slots:
   void httpRequestFinished(int requestId, bool error);
-
-//  void httpStateChanged(int state);
   void readResponseHeader(const QHttpResponseHeader &responseHeader);
 
 
