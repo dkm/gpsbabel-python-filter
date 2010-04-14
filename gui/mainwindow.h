@@ -1,5 +1,5 @@
 // -*- C++ -*-
-// $Id: mainwindow.h,v 1.9 2010/02/16 02:49:43 robertl Exp $
+// $Id: mainwindow.h,v 1.11 2010/04/11 22:38:07 robertl Exp $
 //------------------------------------------------------------------------
 //
 //  Copyright (C) 2009  S. Khai Mong <khai@mangrai.com>.
@@ -40,6 +40,7 @@ private:
   Ui_MainWindow     ui;
   QList<Format>  formatList;
   QString        babelVersion;
+  bool		 is_beta;
   QPixmap        lights[4];
   QStringList    charSets;
   AllFiltersData filterData;
@@ -50,6 +51,7 @@ private:
   void loadFormats();
   QString filterForFormat(int idx);
   QString ensureExtensionPresent(const QString &nanme, int idx);
+  QString findBabelVersion();
   bool    filterForFormatIncludes(int idx, const QString &s);
   int  formatIndexFromName(bool isFile, const QString &);
   QList<int>inputFileFormatIndices();
@@ -81,7 +83,9 @@ private:
   void setWidgetValues();
   void getWidgetValues();
   UpgradeCheck *upgrade;
+  bool allowBetaUpgrades();
   void osLoadDeviceNameCombos(QComboBox*);
+  QString getFormatNameForExtension(QString ext);
 
 protected:
   void closeEvent(QCloseEvent*);
@@ -92,6 +96,8 @@ protected:
   void browseInputFile();
   void browseOutputFile();
   void closeActionX();
+  void dragEnterEvent(QDragEnterEvent *);
+  void dropEvent(QDropEvent *event);
   void filtersClicked();
   void helpActionX();
   void inputDeviceOptBtnClicked();

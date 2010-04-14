@@ -61,10 +61,11 @@
 				ObjectFile=".\Release/"
 				ProgramDataBaseFileName=".\Release/"
 				WarningLevel="3"
-				WarnAsError="true"
+				WarnAsError="false"
 				SuppressStartupBanner="true"
 				DebugInformationFormat="3"
 				CompileAs="0"
+				ErrorReporting="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -144,7 +145,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="expat;."
-				PreprocessorDefinitions="_CRT_SECURE_NO_DEPRECATE;WIN32;__WIN32__;_DEBUG;_CONSOLE;"
+				PreprocessorDefinitions="_CRT_SECURE_NO_DEPRECATE;WIN32;__WIN32__;_DEBUG;_CONSOLE;HAVE_CONFIG_H"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
@@ -154,10 +155,11 @@
 				ProgramDataBaseFileName=".\Debug/"
 				BrowseInformation="1"
 				WarningLevel="3"
-				WarnAsError="true"
+				WarnAsError="false"
 				SuppressStartupBanner="true"
 				DebugInformationFormat="3"
 				CompileAs="0"
+				ErrorReporting="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -368,6 +370,14 @@
 			</File>
 			<File
 				RelativePath="..\brauniger_iq.c"
+				>
+			</File>
+			<File
+				RelativePath="..\bushnell.c"
+				>
+			</File>
+			<File
+				RelativePath="..\bushnell_trl.c"
 				>
 			</File>
 			<File
@@ -629,6 +639,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\enigma.c"
+				>
 			</File>
 			<File
 				RelativePath="..\exif.c"
@@ -1251,6 +1265,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\jogmap.c"
+				>
+			</File>
+			<File
 				RelativePath="..\jtr.c"
 				>
 			</File>
@@ -1811,6 +1829,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\pocketfms_wp.c"
+				>
+			</File>
+			<File
 				RelativePath="..\polygon.c"
 				>
 				<FileConfiguration
@@ -2171,6 +2193,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\skytraq.c"
+				>
+			</File>
+			<File
 				RelativePath="..\smplrout.c"
 				>
 				<FileConfiguration
@@ -2264,6 +2290,10 @@
 			</File>
 			<File
 				RelativePath="..\tef_xml.c"
+				>
+			</File>
+			<File
+				RelativePath="..\teletype.c"
 				>
 			</File>
 			<File
@@ -2603,6 +2633,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\vpl.c"
+				>
+			</File>
+			<File
 				RelativePath="..\waypt.c"
 				>
 				<FileConfiguration
@@ -2644,6 +2678,10 @@
 			</File>
 			<File
 				RelativePath="..\wfff_xml.c"
+				>
+			</File>
+			<File
+				RelativePath="..\wintec_tes.c"
 				>
 			</File>
 			<File
@@ -3236,15 +3274,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\defs.h"
-				>
-			</File>
-			<File
 				RelativePath="..\filterdefs.h"
 				>
 			</File>
 			<File
-				RelativePath="..\garmin_device_xml.h.h"
+				RelativePath="..\garmin_device_xml.h"
 				>
 			</File>
 			<File
