@@ -331,7 +331,7 @@ nmea_wr_init(const char *portname)
 		}
 	}
 
-	mkshort_handle = mkshort_new_handle();
+	mkshort_handle = (struct short_handle_*) mkshort_new_handle();
 	setshort_length(mkshort_handle, atoi(snlenopt));
 
 	if (opt_gisteq) {
@@ -509,21 +509,36 @@ gprmc_parse(char *ibuf)
 	double speed,course;
 	waypoint *waypt;
 	double microseconds;
+	char *dmybuf;
+	int i;
 
 	if (trk_head == NULL) {
 		trk_head = route_head_alloc();
 		track_add_head(trk_head);
 	}
 
-	sscanf(ibuf,"$GPRMC,%lf,%c,%lf,%c,%lf,%c,%lf,%lf,%u",
+	/*
+	 * Read everything except the dmy, in case lngdeg
+	 * and lngdir are missing.
+	 */
+	sscanf(ibuf,"$GPRMC,%lf,%c,%lf,%c,%lf,%c,%lf,%lf",
 		&hms, &fix, &latdeg, &latdir,
 		&lngdeg, &lngdir,
-		&speed, &course, &dmy);
+		&speed, &course);
 
 	if (fix != 'A') {
 		/* ignore this fix - it is invalid */
 		return;
 	}
+
+	/* Skip past nine commas in ibuf to reach the dmy value */
+	for (dmybuf=ibuf,i=0; i<9 && dmybuf != NULL; i++) {
+		dmybuf= strchr(dmybuf, ',');
+		dmybuf++;
+	}
+
+	/* Now read dmy from the correct position */
+	sscanf(dmybuf,"%u", &dmy);
 
 	last_read_time = hms;
 	microseconds = MILLI_TO_MICRO(1000 * (hms - (int)hms));
@@ -1345,7 +1360,9 @@ nmea_wr_posn_deinit(void)
 
 ff_vecs_t nmea_vecs = {
 	ff_type_file,
-	{ ff_cap_read | ff_cap_write, ff_cap_read | ff_cap_write, ff_cap_none},
+	{ (ff_cap)(ff_cap_read | ff_cap_write),
+          (ff_cap)(ff_cap_read | ff_cap_write), 
+          ff_cap_none},
 	nmea_rd_init,	
 	nmea_wr_init,	
 	nmea_rd_deinit,	
