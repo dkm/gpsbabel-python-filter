@@ -1,8 +1,6 @@
 srcdir = @srcdir@
 VPATH = @srcdir@
 
-ACLOCAL_AMFLAGS = -I ./m4
-
 # version and release are defined in the head of configure.in 
 # don't forget 'autoconf' if you change them 
 VERSD=@GBMAJOR@.@GBMINOR@.@GBMICRO@
@@ -37,8 +35,8 @@ OUTPUT_SWITCH=-o #
 #DEBUGGING=-g $(EXTRA_DEBUGGING)
 # add -DDEBUG_MEM to turn on memory allocation logging
 GBCFLAGS=$(EXTRA_CFLAGS) $(DEBUGGING) -I. -I$(srcdir) \
-	$(OPTIMIZATION) -DHAVE_CONFIG_H  @CFLAGS@ @PYTHON_CSPEC@
-LDFLAGS=$(EXTRA_LDFLAGS) @LDFLAGS@ @PYTHON_LSPEC@
+	$(OPTIMIZATION) -DHAVE_CONFIG_H @CFLAGS@
+LDFLAGS=$(EXTRA_LDFLAGS) @LDFLAGS@
 PREFIX=@prefix@
 INSTALL_DIR=$(DESTDIR)/$(PREFIX)
 
@@ -67,7 +65,6 @@ ALL_FMTS=$(MINIMAL_FMTS) gtm.o gpsutil.o pcx.o cetus.o copilot.o \
 	jtr.o sbp.o sbn.o mmo.o skyforce.o itracku.o v900.o delbin.o \
 	pocketfms_bc.o pocketfms_fp.o pocketfms_wp.o naviguide.o enigma.o \
 	vpl.o teletype.o jogmap.o bushnell.o bushnell_trl.o wintec_tes.o \
-        pykml.o
 
 FMTS=@FMTS@
 
@@ -352,6 +349,8 @@ mac-gui: gpsbabel
 	file gpsbabel | grep '2 architectures' || exit 1
 	file gui/objects/gpsbabelfe-bin.app/Contents/MacOS/gpsbabelfe-bin | grep '2 architectures' || exit 1
 	cd gui ; qmake && xcodebuild
+	lupdate 
+	lrelease 
 	cp gpsbabel gui/objects/gpsbabelfe-bin.app/Contents/MacOS
 	cp -r gui/help  gui/objects/gpsbabelfe-bin.app/Contents/MacOS
 	cp gui/gmapbase.html gui/objects/gpsbabelfe-bin.app/Contents/MacOS
@@ -1109,9 +1108,5 @@ zlib/trees.o: zlib/trees.c zlib/deflate.h zlib/zutil.h zlib/zlib.h \
   zlib/zconf.h zlib/trees.h
 zlib/uncompr.o: zlib/uncompr.c zlib/zlib.h zlib/zconf.h
 zlib/zutil.o: zlib/zutil.c zlib/zutil.h zlib/zlib.h zlib/zconf.h
-pykml.o: pykml.c defs.h config.h queue.h gbtypes.h zlib/zlib.h \
-  zlib/zconf.h gbfile.h cet.h cet_util.h inifile.h
-
-
 internal_styles.c: mkstyle.sh @srcdir@/style/*.style
 	@srcdir@/mkstyle.sh > internal_styles.c || (rm -f internal_styles.c ; exit 1)
