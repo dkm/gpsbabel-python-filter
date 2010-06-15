@@ -1,5 +1,5 @@
 /* 
-    Copyright (C) 2002-2006 Robert Lipe, robertlipe@usa.net
+    Copyright (C) 2002-2010 Robert Lipe, robertlipe@gpsbabel.org
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,6 +28,8 @@ static int rte_head_ct;
 static int rte_waypts;
 static int trk_head_ct;
 static int trk_waypts;
+
+extern void update_common_traits(const waypoint* wpt);
 
 void
 route_init(void)
@@ -185,11 +187,19 @@ any_route_add_wpt(route_head *rte, waypoint *wpt, int *ct, int synth )
 		wpt->shortname = xstrdup(tmpnam);
 		wpt->wpt_flags.shortname_is_synthetic = 1;
 	}
+	update_common_traits(wpt);
 }
 
 void 
 route_add_wpt( route_head *rte, waypoint *wpt )
 {
+	// First point in a route is always a new segment.
+	// This improves compatibility when reading from
+	// segment-unaware formats.
+	if (QUEUE_EMPTY(&rte->waypoint_list)) {
+		wpt->wpt_flags.new_trkseg = 1;
+	}
+	
 	any_route_add_wpt( rte, wpt, &rte_waypts, 1 );
 }
 
@@ -560,7 +570,7 @@ void track_recompute(const route_head *trk, computed_trkdata **trkdatap)
 
 	QUEUE_FOR_EACH((queue *)&trk->waypoint_list, elem, tmp) {
 		time_t timed;
-		double tlat, tlon, plat, plon, dist, ddist;
+		double tlat, tlon, plat, plon, dist;
 
 		thisw = (waypoint *)elem;
 		timed = thisw->creation_time - prev->creation_time;
@@ -575,7 +585,6 @@ void track_recompute(const route_head *trk, computed_trkdata **trkdatap)
 		WAYPT_SET(thisw, course, heading_true_degrees(plat, plon,
 			tlat, tlon));
 		dist = radtometers(gcdist(plat, plon, tlat, tlon));
-		ddist = thisw->altitude - prev->altitude;
 
 		/* 
 		 * Avoid that 6300 mile jump as we move from 0,0.
@@ -600,10 +609,6 @@ void track_recompute(const route_head *trk, computed_trkdata **trkdatap)
 			if (thisw->speed < tdata->min_spd) {
 				tdata->min_spd = thisw->speed;
 			}
-		}
-
-		if (timed) {
-		  WAYPT_SET(thisw, vspeed, ddist/labs(timed));
 		}
 
 		if ((thisw->altitude > 0) && (thisw->altitude < tdata->min_alt)) {

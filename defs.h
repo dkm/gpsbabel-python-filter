@@ -349,7 +349,6 @@ typedef struct {
 	unsigned int proximity:1;		/* proximity field is set */
 	unsigned int course:1;			/* course field is set */
 	unsigned int speed:1;			/* speed field is set */
-	unsigned int vspeed:1;			/* vspeed field is set */
 	unsigned int depth:1;			/* depth field is set */
 	/* !ToDo!
 	unsigned int altitude:1;		/+ altitude field is set +/
@@ -360,6 +359,19 @@ typedef struct {
 
 	
 } wp_flags;
+
+// These are dicey as they're collected on read. Subsequent filters may change
+// things, though it's u nlikely to matter in practical terms.  Don't use these
+// if a false positive would be deleterious.
+typedef struct {
+  unsigned int trait_geocaches:1;
+  unsigned int trait_heartrate:1;
+  unsigned int trait_cadence:1;
+  unsigned int trait_power:1;
+  unsigned int trait_depth:1;
+  unsigned int trait_temperature:1;
+} global_trait;
+const global_trait* get_traits();
 
 #define WAYPT_SET(wpt,member,val) { wpt->member = (val); wpt->wpt_flags.member = 1; }
 #define WAYPT_GET(wpt,member,def) ((wpt->wpt_flags.member) ? (wpt->member) : (def))
@@ -451,12 +463,12 @@ typedef struct {
 	float pdop;		
 	float course;	/* Optional: degrees true */
 	float speed;   	/* Optional: meters per second. */
-	float vspeed;  	/* Optional: vertical meters per second. */
 	fix_type fix;	/* Optional: 3d, 2d, etc. */
 	int  sat;	/* Optional: number of sats used for fix */
 
 	unsigned char heartrate; /* Beats/min. likely to get moved to fs. */
 	unsigned char cadence;	 /* revolutions per minute */
+	float power; /* watts, as measured by cyclists */
 	float temperature; /* Degrees celsius */
 	const geocache_data *gc_data;
 	format_specific_data *fs;
